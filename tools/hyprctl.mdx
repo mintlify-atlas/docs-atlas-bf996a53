@@ -1,0 +1,762 @@
+---
+title: "hyprctl"
+description: "The official IPC command-line tool for querying and controlling a running Hyprland instance."
+---
+
+`hyprctl` communicates with a running Hyprland compositor over a Unix socket. Use it to query state, issue dispatchers, set config options dynamically, and automate your workflow from scripts.
+
+## Global options
+
+| Flag | Description |
+|------|-------------|
+| `-i`, `--instance` | Target a specific Hyprland instance by its signature |
+| `-j` | Return output as JSON |
+| `-r` | Refresh the compositor state after issuing the command |
+| `--batch` | Execute multiple commands separated by `;` in one call |
+| `-q`, `--quiet` | Suppress all output |
+| `-h`, `--help` | Print help message |
+
+### Targeting a specific instance
+
+If you run multiple Hyprland instances, use `-i` to target one by its `$HYPRLAND_INSTANCE_SIGNATURE`:
+
+```bash
+hyprctl -i 1234abcd version
+```
+
+### Batch mode
+
+Run multiple commands in one call with `--batch`:
+
+```bash
+hyprctl --batch "keyword general:gaps_out 20 ; keyword general:border_size 3"
+```
+
+### JSON output
+
+Most commands support `-j` to return structured JSON:
+
+```bash
+hyprctl -j clients
+```
+
+---
+
+## Commands
+
+<AccordionGroup>
+
+<Accordion title="activewindow — get focused window">
+Returns the name and properties of the currently focused window.
+
+```bash
+hyprctl activewindow
+```
+
+```bash
+hyprctl -j activewindow
+```
+
+Example JSON output:
+
+```json
+{
+  "address": "0x55f1a2b3c4d5",
+  "mapped": true,
+  "hidden": false,
+  "at": [0, 0],
+  "size": [1280, 720],
+  "workspace": { "id": 1, "name": "1" },
+  "floating": false,
+  "monitor": 0,
+  "class": "kitty",
+  "title": "~",
+  "pid": 12345,
+  "fullscreen": 0,
+  "fullscreenClient": 0
+}
+```
+</Accordion>
+
+<Accordion title="activeworkspace — get focused workspace">
+Returns the name and properties of the currently active workspace.
+
+```bash
+hyprctl activeworkspace
+```
+
+```bash
+hyprctl -j activeworkspace
+```
+</Accordion>
+
+<Accordion title="animations — list animation config">
+Returns the current configuration for all animations and bezier curves.
+
+```bash
+hyprctl animations
+```
+
+```bash
+hyprctl -j animations
+```
+</Accordion>
+
+<Accordion title="binds — list all keybinds">
+Lists all registered keybinds with their modifiers, keys, and dispatchers.
+
+```bash
+hyprctl binds
+```
+
+```bash
+hyprctl -j binds
+```
+</Accordion>
+
+<Accordion title="clients — list all windows">
+Lists all open windows (clients) with their full properties including address, class, title, workspace, position, and size.
+
+```bash
+hyprctl clients
+```
+
+```bash
+hyprctl -j clients
+```
+</Accordion>
+
+<Accordion title="configerrors — list config parse errors">
+Lists all current configuration parsing errors. Useful for debugging your `hyprland.conf`.
+
+```bash
+hyprctl configerrors
+```
+</Accordion>
+
+<Accordion title="cursorpos — get cursor position">
+Returns the current cursor position in global layout coordinates.
+
+```bash
+hyprctl cursorpos
+```
+
+Example output:
+
+```
+x: 1234, y: 567
+```
+</Accordion>
+
+<Accordion title="decorations — list window decorations">
+Lists all decorations applied to a specific window and their properties.
+
+```bash
+hyprctl decorations kitty
+```
+
+Pass a window class name or address to target a specific window.
+</Accordion>
+
+<Accordion title="descriptions — get all config option descriptions">
+Returns a parsable JSON object with all config options, their descriptions, value types, and valid ranges.
+
+```bash
+hyprctl -j descriptions
+```
+</Accordion>
+
+<Accordion title="devices — list input devices">
+Lists all connected keyboards and mice with their names and properties.
+
+```bash
+hyprctl devices
+```
+
+```bash
+hyprctl -j devices
+```
+</Accordion>
+
+<Accordion title="dismissnotify — dismiss notifications">
+Dismisses all Hyprland notifications, or a specific number of them.
+
+```bash
+# Dismiss all notifications
+hyprctl dismissnotify -1
+
+# Dismiss the oldest 3 notifications
+hyprctl dismissnotify 3
+```
+</Accordion>
+
+<Accordion title="dispatch — run a dispatcher">
+Issues a dispatcher command. See the [Dispatchers](#dispatchers) section below for the full list.
+
+```bash
+hyprctl dispatch exec kitty
+hyprctl dispatch workspace 2
+hyprctl dispatch movefocus l
+```
+</Accordion>
+
+<Accordion title="getoption — get a config option value">
+Returns the current value of a config option.
+
+```bash
+hyprctl getoption general:gaps_out
+```
+
+```bash
+hyprctl -j getoption general:border_size
+```
+
+Example JSON output:
+
+```json
+{
+  "option": "general:border_size",
+  "int": 2,
+  "float": 0.0,
+  "str": "",
+  "data": "unset",
+  "set": false
+}
+```
+</Accordion>
+
+<Accordion title="globalshortcuts — list global shortcuts">
+Lists all registered global shortcuts exposed via the GlobalShortcuts portal.
+
+```bash
+hyprctl globalshortcuts
+```
+</Accordion>
+
+<Accordion title="hyprpaper — interact with hyprpaper">
+Sends commands to the `hyprpaper` wallpaper daemon if it is running.
+
+```bash
+hyprctl hyprpaper wallpaper "DP-1,~/wallpapers/example.png"
+```
+</Accordion>
+
+<Accordion title="instances — list Hyprland instances">
+Lists all running Hyprland instances and their info, including their instance signatures.
+
+```bash
+hyprctl instances
+```
+
+```bash
+hyprctl -j instances
+```
+</Accordion>
+
+<Accordion title="keyword — set a config option dynamically">
+Sets a config keyword at runtime without reloading the full config.
+
+```bash
+hyprctl keyword general:gaps_out 20
+hyprctl keyword decoration:rounding 8
+hyprctl keyword bind , Return, exec, kitty
+```
+
+<Note>Changes made with `keyword` persist only for the current session and are overwritten on the next config reload.</Note>
+</Accordion>
+
+<Accordion title="kill — click-to-kill mode">
+Puts Hyprland into kill mode. Click a window to close it.
+
+```bash
+hyprctl kill
+```
+</Accordion>
+
+<Accordion title="layers — list layer surfaces">
+Lists all active layer surfaces (e.g., bars, notifications, lock screens) with their namespace and geometry.
+
+```bash
+hyprctl layers
+```
+
+```bash
+hyprctl -j layers
+```
+</Accordion>
+
+<Accordion title="layouts — list available layouts">
+Lists all available layouts, including those provided by plugins.
+
+```bash
+hyprctl layouts
+```
+</Accordion>
+
+<Accordion title="monitors — list monitors">
+Lists all active monitors with their properties: resolution, refresh rate, position, scale, and active workspace.
+
+```bash
+hyprctl monitors
+```
+
+```bash
+# Include disconnected monitors
+hyprctl monitors all
+```
+
+```bash
+hyprctl -j monitors
+```
+</Accordion>
+
+<Accordion title="notify — send a notification">
+Sends a notification using the built-in Hyprland notification system.
+
+```bash
+hyprctl notify <type> <duration_ms> <color> <message>
+```
+
+| Type | Icon |
+|------|------|
+| `-1` | No icon |
+| `0` | WARNING |
+| `1` | INFO |
+| `2` | HINT |
+| `3` | ERROR |
+| `4` | CONFUSED |
+| `5` | OK |
+
+```bash
+# Show an INFO notification for 5 seconds
+hyprctl notify 1 5000 "rgb(ff9900)" "Hello from hyprctl"
+```
+</Accordion>
+
+<Accordion title="output — add or remove fake outputs">
+Creates or removes virtual outputs on a specific backend. Useful for headless setups and testing.
+
+```bash
+# Create a headless virtual output
+hyprctl output create headless
+
+# Create a Wayland virtual output
+hyprctl output create wayland
+
+# Remove an output by name
+hyprctl output remove HEADLESS-1
+```
+
+Supported backends: `wayland`, `x11`, `headless`, `auto`.
+</Accordion>
+
+<Accordion title="plugin — interact with a plugin">
+Sends a command to a loaded plugin.
+
+```bash
+hyprctl plugin my-plugin-name <args>
+```
+</Accordion>
+
+<Accordion title="reload — reload the config">
+Forces a full config reload.
+
+```bash
+hyprctl reload
+```
+
+To reload only the config without reinitializing everything:
+
+```bash
+hyprctl reload config-only
+```
+</Accordion>
+
+<Accordion title="rollinglog — tail the Hyprland log">
+Prints the tail of the Hyprland log file.
+
+```bash
+hyprctl rollinglog
+```
+
+Follow the log in real time:
+
+```bash
+hyprctl rollinglog -f
+```
+</Accordion>
+
+<Accordion title="setcursor — set cursor theme">
+Sets the cursor theme and reloads the cursor manager.
+
+```bash
+hyprctl setcursor Bibata-Modern-Classic 24
+```
+</Accordion>
+
+<Accordion title="seterror — set the hyprctl error string">
+Sets a custom error string displayed by Hyprland, or clears it.
+
+```bash
+hyprctl seterror "rgb(ff0000)" "Something went wrong"
+
+# Clear the error
+hyprctl seterror disable
+```
+</Accordion>
+
+<Accordion title="setprop — set a window property">
+Sets a property on a specific window. See [Window properties](#window-properties) below for the full list.
+
+```bash
+# Syntax
+hyprctl setprop <window> <prop> <value> [lock]
+
+# Examples
+hyprctl setprop address:0x55f1a2b3 rounding 8
+hyprctl setprop class:kitty forcenoblur 1
+hyprctl setprop class:firefox bordersize 4 lock
+```
+
+Pass `lock` at the end to prevent the property from being overridden by window rules.
+</Accordion>
+
+<Accordion title="splash — print the current splash">
+Prints the current random splash message shown in the Hyprland startup log.
+
+```bash
+hyprctl splash
+```
+</Accordion>
+
+<Accordion title="switchxkblayout — change keyboard layout">
+Sets the XKB layout index for a specific keyboard.
+
+```bash
+# Cycle to the next layout
+hyprctl switchxkblayout at-translated-set-2-keyboard next
+
+# Go to the previous layout
+hyprctl switchxkblayout at-translated-set-2-keyboard prev
+
+# Switch to layout index 1
+hyprctl switchxkblayout at-translated-set-2-keyboard 1
+```
+
+Use `hyprctl devices` to find keyboard names.
+</Accordion>
+
+<Accordion title="systeminfo — print system info">
+Prints system information including the OS, kernel version, and hardware details.
+
+```bash
+hyprctl systeminfo
+```
+</Accordion>
+
+<Accordion title="version — print Hyprland version">
+Prints the Hyprland version, including build flags, commit hash, and branch.
+
+```bash
+hyprctl version
+```
+
+```bash
+hyprctl -j version
+```
+</Accordion>
+
+<Accordion title="workspacerules — list workspace rules">
+Returns all defined workspace rules from your config.
+
+```bash
+hyprctl workspacerules
+```
+
+```bash
+hyprctl -j workspacerules
+```
+</Accordion>
+
+<Accordion title="workspaces — list all workspaces">
+Lists all workspaces with their properties: id, name, monitor, window count, and last active window.
+
+```bash
+hyprctl workspaces
+```
+
+```bash
+hyprctl -j workspaces
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Dispatchers
+
+The `dispatch` command accepts a dispatcher name and its arguments. Run `hyprctl dispatch <dispatcher> <args>`.
+
+```bash
+hyprctl dispatch exec kitty
+hyprctl dispatch workspace 3
+hyprctl dispatch movefocus r
+```
+
+<AccordionGroup>
+
+<Accordion title="Shell execution">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `exec` | Execute a shell command |
+| `execr` | Execute a raw shell command (no shell expansion) |
+
+```bash
+hyprctl dispatch exec "kitty --title myterminal"
+hyprctl dispatch execr /usr/bin/kitty
+```
+</Accordion>
+
+<Accordion title="Window management">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `killactive` | Close the currently focused window |
+| `closewindow` | Close a specified window |
+| `togglefloating` | Toggle floating state of the active window |
+| `setfloating` | Set the active window to floating |
+| `settiled` | Set the active window to tiled |
+| `fullscreen` | Toggle fullscreen for the focused window |
+| `fakefullscreen` | Toggle internal (client-reported) fullscreen |
+| `fullscreenstate` | Set fullscreen mode and client-reported mode explicitly |
+| `pin` | Pin a window so it appears on all workspaces |
+| `centerwindow` | Center the active window on the screen |
+| `resizeactive` | Resize the active window (use `exact` or relative values) |
+| `moveactive` | Move the active window |
+| `resizewindowpixel` | Resize a specified window to exact pixel dimensions |
+| `movewindowpixel` | Move a specified window to exact pixel coordinates |
+| `alterzorder` | Modify the window stack order of the active or specified window |
+
+```bash
+hyprctl dispatch killactive
+hyprctl dispatch fullscreen 1
+hyprctl dispatch resizeactive 100 0
+hyprctl dispatch pin
+```
+
+`fullscreenstate` takes two integers: the internal state and the client-reported state.
+
+| Value | Meaning |
+|-------|---------|
+| `-1` | Current (no change) |
+| `0` | None |
+| `1` | Maximize (no fullscreen) |
+| `2` | Fullscreen |
+| `3` | Maximize and fullscreen |
+
+```bash
+hyprctl dispatch fullscreenstate 2 2
+```
+</Accordion>
+
+<Accordion title="Focus and navigation">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `movefocus` | Move focus in a direction (`l`, `r`, `u`, `d`) |
+| `focuswindow` | Focus the first window matching a rule |
+| `focusmonitor` | Focus a monitor by name or id |
+| `cyclenext` | Focus the next window on the current workspace |
+| `focuscurrentorlast` | Switch focus between current and previously focused window |
+| `focusurgentorlast` | Focus the urgent window, or the last focused window |
+
+```bash
+hyprctl dispatch movefocus l
+hyprctl dispatch focuswindow class:kitty
+hyprctl dispatch focusmonitor DP-1
+hyprctl dispatch cyclenext
+```
+</Accordion>
+
+<Accordion title="Window movement">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `movewindow` | Move the active window in a direction or to a monitor |
+| `swapwindow` | Swap the active window with another window in a direction |
+| `swapnext` | Swap the focused window with the next window |
+
+```bash
+hyprctl dispatch movewindow l
+hyprctl dispatch movewindow mon:DP-2
+hyprctl dispatch swapwindow r
+```
+</Accordion>
+
+<Accordion title="Workspace navigation">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `workspace` | Switch to a workspace |
+| `movetoworkspace` | Move the focused window to a workspace and follow it |
+| `movetoworkspacesilent` | Move the focused window to a workspace without switching |
+| `togglespecialworkspace` | Toggle a special workspace on/off |
+| `focusworkspaceoncurrentmonitor` | Focus a workspace, keeping it on the current monitor |
+| `renameworkspace` | Rename a workspace |
+
+```bash
+hyprctl dispatch workspace 3
+hyprctl dispatch workspace name:coding
+hyprctl dispatch workspace special:scratch
+hyprctl dispatch movetoworkspace 5
+hyprctl dispatch movetoworkspacesilent 2
+hyprctl dispatch togglespecialworkspace scratch
+hyprctl dispatch renameworkspace 3 work
+```
+
+Special workspaces use the `special:` prefix or just the name registered with `togglespecialworkspace`.
+</Accordion>
+
+<Accordion title="Monitor management">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `movecurrentworkspacetomonitor` | Move the active workspace to a monitor |
+| `moveworkspacetomonitor` | Move a named workspace to a monitor |
+| `swapactiveworkspaces` | Swap the active workspaces between two monitors |
+| `dpms` | Set DPMS (display power) state for all monitors |
+
+```bash
+hyprctl dispatch movecurrentworkspacetomonitor DP-2
+hyprctl dispatch moveworkspacetomonitor 3 DP-1
+hyprctl dispatch swapactiveworkspaces DP-1 DP-2
+hyprctl dispatch dpms off
+hyprctl dispatch dpms on DP-1
+```
+</Accordion>
+
+<Accordion title="Groups">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `togglegroup` | Toggle the active window into a group |
+| `changegroupactive` | Switch to the next window in a group (`f` forward, `b` back) |
+| `lockgroups` | Lock groups (prevent windows from being added/removed) |
+| `lockactivegroup` | Lock the currently focused group |
+| `moveintogroup` | Move the active window into a group in a direction |
+| `moveoutofgroup` | Move the active window out of its group |
+| `movewindoworgroup` | Behave as `moveintogroup` if a group exists, otherwise `movewindow` |
+| `movegroupwindow` | Swap the active window with the next or previous window in a group |
+| `denywindowfromgroup` | Prevent the active window from becoming or being inserted into a group |
+| `setignoregrouplock` | Temporarily enable or disable `binds:ignore_group_lock` |
+
+```bash
+hyprctl dispatch togglegroup
+hyprctl dispatch changegroupactive f
+hyprctl dispatch moveintogroup l
+hyprctl dispatch moveoutofgroup
+```
+</Accordion>
+
+<Accordion title="Input and cursor">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `pass` | Pass a key event to a specified window |
+| `sendshortcut` | Send a shortcut to a specified window when another shortcut is triggered |
+| `sendkeystate` | Send a key with a specific state (`down`, `repeat`, `up`) to a window |
+| `switchxkblayout` | Alias: set XKB layout for a keyboard |
+| `movecursor` | Move the cursor to an absolute position |
+| `movecursortocorner` | Move the cursor to a corner of the active window |
+
+```bash
+hyprctl dispatch movecursor 960 540
+hyprctl dispatch movecursortocorner 0
+```
+
+Corner values for `movecursortocorner`: `0` = bottom-left, `1` = bottom-right, `2` = top-right, `3` = top-left.
+</Accordion>
+
+<Accordion title="Layout and split">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `splitratio` | Change the split ratio in a tiling layout |
+| `tagwindow` | Apply a tag to the active window |
+
+```bash
+hyprctl dispatch splitratio 0.1
+hyprctl dispatch splitratio -0.2
+hyprctl dispatch tagwindow +myTag
+```
+</Accordion>
+
+<Accordion title="Miscellaneous">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `toggleopaque` | Toggle the current window to always be opaque |
+| `forcerendererreload` | Force the renderer to reload all resources and outputs |
+| `exit` | Exit the compositor immediately |
+| `global` | Execute a global shortcut via the GlobalShortcuts portal |
+| `submap` | Change the current keybind submap |
+| `event` | Emit a custom event to socket2 |
+
+```bash
+hyprctl dispatch submap resize
+hyprctl dispatch submap reset
+hyprctl dispatch event myCustomEvent
+hyprctl dispatch exit
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Window properties
+
+The `setprop` command accepts the following properties:
+
+```bash
+hyprctl setprop <window> <property> <value> [lock]
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `animationstyle` | string | Override the animation style |
+| `rounding` | number | Corner rounding radius in pixels |
+| `bordersize` | number | Border width in pixels |
+| `forcenoblur` | 0 / 1 | Disable blur for this window |
+| `forceopaque` | 0 / 1 | Force the window to be fully opaque |
+| `forceopaqueoverriden` | 0 / 1 | Force opaque even when overridden |
+| `forceallowsinput` | 0 / 1 | Force the window to accept input |
+| `forcenoanims` | 0 / 1 | Disable animations for this window |
+| `forcenoborder` | 0 / 1 | Remove the border from this window |
+| `forcenodim` | 0 / 1 | Prevent the window from being dimmed |
+| `forcenoshadow` | 0 / 1 | Remove the shadow from this window |
+| `nofocus` | 0 / 1 | Prevent the window from receiving focus |
+| `windowdancecompat` | 0 / 1 | Enable window dance compatibility mode |
+| `nomaxsize` | 0 / 1 | Ignore the window's maximum size hint |
+| `minsize` | vector | Override the minimum window size |
+| `maxsize` | vector | Override the maximum window size |
+| `dimaround` | 0 / 1 | Dim all windows around this one |
+| `keepaspectratio` | 0 / 1 | Keep the window's aspect ratio when resizing |
+| `alphaoverride` | 0 / 1 | Override alpha (opacity) |
+| `alpha` | float | Window opacity (0.0–1.0) |
+| `alphainactiveoverride` | 0 / 1 | Override alpha when inactive |
+| `alphainactive` | float | Opacity when inactive |
+| `alphafullscreenoverride` | 0 / 1 | Override alpha when fullscreen |
+| `alphafullscreen` | float | Opacity when fullscreen |
+| `activebordercolor` | color | Override active border color |
+| `inactivebordercolor` | color | Override inactive border color |
+
+```bash
+# Set rounding and lock it so window rules cannot override it
+hyprctl setprop class:firefox rounding 0 lock
+
+# Force kitty to be opaque
+hyprctl setprop class:kitty forceopaque 1
+```

@@ -1,0 +1,223 @@
+---
+title: "Dwindle layout"
+description: "Binary space partitioning layout for Hyprland. Reference for all dwindle config options, dispatchers, and pseudotiling."
+keywords: ["dwindle", "layout", "tiling", "bsp", "binary space partitioning", "pseudotile", "hyprland"]
+---
+
+Dwindle is the default Hyprland layout. When a new window opens, it splits the space of the currently focused tile in two — one half goes to the existing window, the other half to the new one. Splits recurse, producing a binary space partitioning (BSP) tree across the workspace.
+
+Split direction (horizontal or vertical) is chosen automatically based on the aspect ratio of the available space, but can be locked, forced, or overridden with the options below.
+
+## Configuration
+
+Add a `dwindle {}` block to `hyprland.conf`. All keys are optional; defaults are shown.
+
+```ini hyprland.conf
+dwindle {
+    pseudotile             = false
+    preserve_split         = false
+    force_split            = 0
+    smart_split            = false
+    smart_resizing         = true
+    permanent_direction_override = false
+    special_scale_factor   = 1.0
+    split_width_multiplier = 1.0
+    use_active_for_splits  = true
+    default_split_ratio    = 1.0
+    split_bias             = 0
+}
+```
+
+<AccordionGroup>
+  <Accordion title="pseudotile">
+    **Type:** bool | **Default:** `false`
+
+    Master switch for pseudotiling. When enabled, windows that request a specific size smaller than their tile are rendered at that size inside the tile instead of being stretched to fill it. Must be `true` for the `togglepseudo` dispatcher to work.
+  </Accordion>
+
+  <Accordion title="preserve_split">
+    **Type:** bool | **Default:** `false`
+
+    When `true`, the split direction (horizontal or vertical) is remembered per node and not recalculated when the layout is updated. Prevents splits from flipping when windows are added or removed.
+
+    Recommended for most setups — enable this alongside the example config.
+  </Accordion>
+
+  <Accordion title="force_split">
+    **Type:** int | **Default:** `0`
+
+    Controls which side of the current tile the new window is placed on.
+
+    | Value | Behavior |
+    |---|---|
+    | `0` | Cursor position decides: new window goes on whichever half the cursor is over |
+    | `1` | New window always opens on the left/top half |
+    | `2` | New window always opens on the right/bottom half |
+  </Accordion>
+
+  <Accordion title="smart_split">
+    **Type:** bool | **Default:** `false`
+
+    When `true`, the split direction and position are inferred from where the cursor is relative to the center of the tile — diagonals determine the dominant axis. Overrides `force_split`.
+  </Accordion>
+
+  <Accordion title="smart_resizing">
+    **Type:** bool | **Default:** `true`
+
+    When resizing a tile, Hyprland adjusts both the target node and its siblings to keep the total area consistent. When `false`, only the direct parent split ratio is modified.
+  </Accordion>
+
+  <Accordion title="permanent_direction_override">
+    **Type:** bool | **Default:** `false`
+
+    When `true`, the direction set by `layoutmsg preselect` persists across multiple window openings instead of resetting after the first one.
+  </Accordion>
+
+  <Accordion title="special_scale_factor">
+    **Type:** float | **Default:** `1.0`
+
+    Scale factor applied to windows on special workspaces (the scratchpad). Values below `1.0` shrink the effective area, leaving visible gaps around the window.
+  </Accordion>
+
+  <Accordion title="split_width_multiplier">
+    **Type:** float | **Default:** `1.0`
+
+    Multiplier applied to the tile height when deciding whether to split horizontally or vertically. A value greater than `1.0` biases toward vertical splits; less than `1.0` biases toward horizontal splits.
+
+    The split direction test is: `height × split_width_multiplier > width` → split vertically.
+  </Accordion>
+
+  <Accordion title="use_active_for_splits">
+    **Type:** bool | **Default:** `true`
+
+    When `true`, new windows split next to the currently focused window rather than the window under the cursor. Set to `false` to use cursor position for determining where the split occurs.
+  </Accordion>
+
+  <Accordion title="default_split_ratio">
+    **Type:** float | **Default:** `1.0` | **Range:** `0.1` – `1.9`
+
+    Initial split ratio for every new split. `1.0` means equal halves. Values above `1.0` give more space to the first child; values below `1.0` give more space to the second child.
+  </Accordion>
+
+  <Accordion title="split_bias">
+    **Type:** int | **Default:** `0`
+
+    When `1`, the `default_split_ratio` is inverted for the new window, so the existing window always gets the larger share of the split.
+  </Accordion>
+</AccordionGroup>
+
+## Dispatchers
+
+Send these commands through the `layoutmsg` dispatcher. They only take effect when Dwindle is the active layout.
+
+```ini hyprland.conf
+bind = $mainMod, J,       layoutmsg, togglesplit
+bind = $mainMod SHIFT, J, layoutmsg, swapsplit
+bind = $mainMod, P,       layoutmsg, togglepseudo
+```
+
+<AccordionGroup>
+  <Accordion title="togglesplit">
+    Flip the split direction of the focused window's parent node between horizontal and vertical.
+  </Accordion>
+
+  <Accordion title="swapsplit">
+    Swap the two children of the focused window's parent node, mirroring the layout without changing split direction.
+  </Accordion>
+
+  <Accordion title="rotatesplit [angle]">
+    Rotate the parent split by `angle` degrees (default `90`). Accepts multiples of 90. Negative values rotate counter-clockwise.
+
+    ```ini
+    bind = $mainMod, R, layoutmsg, rotatesplit
+    bind = $mainMod SHIFT, R, layoutmsg, rotatesplit 180
+    ```
+  </Accordion>
+
+  <Accordion title="togglepseudo">
+    Toggle pseudotiling for the focused window. Requires `pseudotile = true` in the `dwindle {}` block.
+  </Accordion>
+
+  <Accordion title="preselect [direction]">
+    Pre-select the direction in which the next window will open. The direction resets after one window opens unless `permanent_direction_override = true`.
+
+    Valid directions: `up` (or `t`), `down` (or `b`), `left` (`l`), `right` (`r`). Pass any other value to cancel.
+
+    ```ini
+    bind = $mainMod, up,    layoutmsg, preselect up
+    bind = $mainMod, down,  layoutmsg, preselect down
+    bind = $mainMod, left,  layoutmsg, preselect left
+    bind = $mainMod, right, layoutmsg, preselect right
+    ```
+  </Accordion>
+
+  <Accordion title="splitratio [delta]">
+    Adjust the split ratio of the focused window's parent. Accepts a relative delta (`+0.1`, `-0.1`) or an exact value when suffixed with `exact`.
+
+    ```ini
+    bind = $mainMod, equal, layoutmsg, splitratio +0.1
+    bind = $mainMod, minus, layoutmsg, splitratio -0.1
+    # Set an exact ratio
+    bind = $mainMod SHIFT, equal, layoutmsg, splitratio 1.2 exact
+    ```
+  </Accordion>
+
+  <Accordion title="movetoroot [window] [unstable]">
+    Move the focused window (or a window matched by `window` regex) to the root of the BSP tree, making it occupy roughly half the workspace. Pass `unstable` as the third argument to skip the position-stabilizing swap.
+  </Accordion>
+</AccordionGroup>
+
+## Pseudotiling
+
+Pseudotiling lets a window render at its preferred (requested) size inside its tile instead of being stretched to fill the available space. The window stays in the layout — it does not float.
+
+To enable it:
+
+1. Set `pseudotile = true` in the `dwindle {}` block.
+2. Bind a key to toggle pseudotiling for individual windows.
+
+```ini hyprland.conf
+dwindle {
+    pseudotile    = true
+    preserve_split = true
+}
+
+bind = $mainMod, P, layoutmsg, togglepseudo
+```
+
+<Note>
+  Pseudotiling only affects windows that report a maximum or preferred size smaller than their allocated tile. Applications that expand to fill any size are unaffected.
+</Note>
+
+## Example config
+
+```ini hyprland.conf
+general {
+    layout = dwindle
+}
+
+dwindle {
+    pseudotile             = true   # enable pseudotiling support
+    preserve_split         = true   # keep split directions stable
+    force_split            = 0      # follow cursor for new window placement
+    smart_split            = false
+    smart_resizing         = true
+    use_active_for_splits  = true
+    default_split_ratio    = 1.0
+    split_width_multiplier = 1.0
+}
+
+# Dwindle keybinds
+bind = $mainMod, P, layoutmsg, togglepseudo   # toggle pseudotile
+bind = $mainMod, J, layoutmsg, togglesplit    # flip split direction
+
+# Resize split ratio
+bind = $mainMod, equal, layoutmsg, splitratio +0.1
+bind = $mainMod, minus, layoutmsg, splitratio -0.1
+
+# Pre-select next window direction
+bind = $mainMod, up,    layoutmsg, preselect up
+bind = $mainMod, down,  layoutmsg, preselect down
+bind = $mainMod, left,  layoutmsg, preselect left
+bind = $mainMod, right, layoutmsg, preselect right
+```

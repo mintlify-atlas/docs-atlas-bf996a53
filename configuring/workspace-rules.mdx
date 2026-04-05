@@ -1,0 +1,268 @@
+---
+title: 'Workspace rules'
+description: 'Assign monitors, gaps, borders, layouts, and other properties to workspaces in Hyprland.'
+keywords: ['hyprland', 'workspace rules', 'workspaces', 'scratchpad', 'special workspace', 'persistent']
+---
+
+## Syntax
+
+```ini
+workspace = WORKSPACE_SELECTOR, RULE [, RULE...]
+```
+
+Multiple rules can be listed after the selector, separated by commas. A single workspace can have multiple `workspace =` lines; rules are merged together.
+
+```ini
+workspace = 1, monitor:DP-1, default:true
+workspace = 2, monitor:HDMI-A-1
+workspace = special:magic, on-created-empty:kitty
+```
+
+## Workspace selectors
+
+<Tabs>
+  <Tab title="Numeric">
+    Workspaces 1–∞ are addressed by number:
+
+    ```ini
+    workspace = 1, monitor:DP-1
+    workspace = 10, persistent:true
+    ```
+  </Tab>
+  <Tab title="Named">
+    Use `name:LABEL` to address a named workspace:
+
+    ```ini
+    workspace = name:dev, monitor:DP-1, default:true
+    workspace = name:web, monitor:HDMI-A-1
+    ```
+
+    Switch to a named workspace with:
+    ```ini
+    bind = $mainMod, D, workspace, name:dev
+    ```
+  </Tab>
+  <Tab title="Special">
+    Special workspaces are scratchpads that overlay other workspaces:
+
+    ```ini
+    workspace = special:magic, on-created-empty:kitty
+    ```
+
+    Toggle with:
+    ```ini
+    bind = $mainMod, S, togglespecialworkspace, magic
+    bind = $mainMod SHIFT, S, movetoworkspace, special:magic
+    ```
+  </Tab>
+  <Tab title="Selectors">
+    Dynamic selectors match workspaces based on their current state. These are used primarily in workspace rules to control gaps/borders:
+
+    | Selector | Matches |
+    |----------|---------|
+    | `w[tv1]` | Workspaces with 1 **t**iled **v**isible window |
+    | `w[tv2]` | Workspaces with 2 tiled visible windows |
+    | `w[tgv1]` | Workspaces with 1 tiled (including grouped) visible window |
+    | `f[1]` | Workspaces with 1 **f**loating window |
+    | `e[0]` | **E**mpty workspaces |
+
+    ```ini
+    # "Smart gaps": remove gaps when only one window is tiled
+    workspace = w[tv1], gapsout:0, gapsin:0
+    workspace = f[1], gapsout:0, gapsin:0
+    ```
+  </Tab>
+</Tabs>
+
+## Available rules
+
+<AccordionGroup>
+
+<Accordion title="Monitor binding">
+
+Bind a workspace to a specific monitor. The workspace will always open on that monitor.
+
+```ini
+# Bind by monitor name
+workspace = 1, monitor:DP-1
+workspace = 2, monitor:HDMI-A-1
+
+# Bind by monitor description prefix
+workspace = name:gaming, monitor:desc:LG ULTRAGEAR
+```
+
+Use `hyprctl monitors` to find monitor names and descriptions.
+
+</Accordion>
+
+<Accordion title="Default workspace">
+
+Mark a workspace as the default for a monitor. When that monitor connects, it will start on this workspace:
+
+```ini
+workspace = 1, monitor:DP-1, default:true
+workspace = name:web, monitor:HDMI-A-1, default:true
+```
+
+</Accordion>
+
+<Accordion title="Persistent">
+
+Prevent the workspace from being destroyed when it becomes empty:
+
+```ini
+workspace = 1, persistent:true
+workspace = special:terminal, persistent:true
+```
+
+</Accordion>
+
+<Accordion title="Gaps">
+
+Override gap sizes for matching workspaces:
+
+```ini
+# Remove all gaps on workspaces with a single tiled window
+workspace = w[tv1], gapsout:0, gapsin:0
+
+# Custom gaps on a specific workspace
+workspace = name:focus, gapsout:40, gapsin:10
+```
+
+Gap values follow CSS shorthand (top/right/bottom/left):
+
+```ini
+# All sides
+workspace = 1, gapsout:20
+
+# Top/bottom and left/right
+workspace = 1, gapsout:10 20
+
+# Top, right, bottom, left
+workspace = 1, gapsout:10 20 10 20
+```
+
+</Accordion>
+
+<Accordion title="Border and decoration">
+
+Override border, rounding, and decoration for matching workspaces:
+
+| Rule | Type | Description |
+|------|------|-------------|
+| `border:true/false` | bool | Show or hide window borders |
+| `bordersize:N` | int | Override border width in pixels |
+| `rounding:true/false` | bool | Enable or disable corner rounding |
+| `decorate:true/false` | bool | Show or hide all window decorations |
+| `shadow:true/false` | bool | Enable or disable shadows |
+
+```ini
+workspace = w[tv1], border:false, rounding:false
+workspace = name:minimal, decorate:false, shadow:false
+```
+
+</Accordion>
+
+<Accordion title="Layout">
+
+Set a specific tiling layout for a workspace:
+
+```ini
+workspace = name:dev, layoutopt:orientation:center
+workspace = 5, layout:master
+```
+
+Layout options depend on the layout. For master layout:
+
+```ini
+workspace = name:media, layoutopt:orientation:center
+```
+
+</Accordion>
+
+<Accordion title="On-created-empty">
+
+Run a command when the workspace is first opened empty:
+
+```ini
+workspace = special:terminal, on-created-empty:kitty
+workspace = name:browser, on-created-empty:firefox
+```
+
+</Accordion>
+
+<Accordion title="Default name">
+
+Set a display name for a numeric workspace:
+
+```ini
+workspace = 1, defaultname:Terminal
+workspace = 2, defaultname:Browser
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+## Special workspaces (scratchpads)
+
+Special workspaces act as scratchpads that slide over the current workspace. Multiple named special workspaces can exist simultaneously.
+
+```ini
+# Define a special workspace with a program that opens on first toggle
+workspace = special:magic, on-created-empty:kitty
+
+# Toggle it
+bind = $mainMod, S, togglespecialworkspace, magic
+
+# Send the active window to the special workspace
+bind = $mainMod SHIFT, S, movetoworkspace, special:magic
+```
+
+<Tip>
+  Setting `misc:close_special_on_empty = true` (the default) hides the special workspace automatically when you move its last window away.
+</Tip>
+
+You can have multiple named special workspaces:
+
+```ini
+workspace = special:terminal, on-created-empty:kitty
+workspace = special:files, on-created-empty:thunar
+
+bind = $mainMod, grave, togglespecialworkspace, terminal
+bind = $mainMod, E, togglespecialworkspace, files
+```
+
+## Querying workspace rules
+
+```bash
+hyprctl workspacerules
+hyprctl workspaces
+```
+
+## Complete example
+
+```ini
+# Monitor assignments
+workspace = 1, monitor:DP-1, default:true, persistent:true
+workspace = 2, monitor:DP-1
+workspace = 3, monitor:DP-1
+workspace = 4, monitor:DP-1
+workspace = 5, monitor:DP-1
+
+workspace = 6, monitor:HDMI-A-1, default:true
+workspace = 7, monitor:HDMI-A-1
+workspace = 8, monitor:HDMI-A-1
+workspace = 9, monitor:HDMI-A-1
+workspace = 10, monitor:HDMI-A-1
+
+# Smart gaps — no gaps when only one window
+workspace = w[tv1], gapsout:0, gapsin:0
+workspace = f[1], gapsout:0, gapsin:0
+
+# Special workspace — open terminal on toggle
+workspace = special:magic, on-created-empty:kitty
+
+bind = $mainMod, S, togglespecialworkspace, magic
+bind = $mainMod SHIFT, S, movetoworkspace, special:magic
+```

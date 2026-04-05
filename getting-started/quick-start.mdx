@@ -1,0 +1,202 @@
+---
+title: "Quick start"
+description: "Learn the essentials of Hyprland's config file, default keybinds, and how to get productive fast."
+keywords: ["quick start", "config", "keybinds", "monitor", "autostart", "hyprland"]
+---
+
+After [installing Hyprland](/getting-started/installation) and launching it for the first time, you will land on a desktop with the default configuration. This page walks you through the most important parts of that config so you can start customizing immediately.
+
+## Config file overview
+
+Hyprland reads its configuration from `~/.config/hypr/hyprland.conf`. The file is plain text and is reloaded instantly every time you save it — no restart required.
+
+The example config is organized into clearly labeled sections:
+
+| Section | Purpose |
+|---|---|
+| `MONITORS` | Output configuration (resolution, scale, position) |
+| `MY PROGRAMS` | Variables for your terminal, file manager, and launcher |
+| `AUTOSTART` | Commands run once when Hyprland starts |
+| `ENVIRONMENT VARIABLES` | Cursor size, app scaling, etc. |
+| `LOOK AND FEEL` | Gaps, borders, blur, shadows, animations |
+| `INPUT` | Keyboard layout, mouse sensitivity, touchpad |
+| `KEYBINDINGS` | All keyboard and mouse shortcuts |
+| `WINDOWS AND WORKSPACES` | Window rules and workspace rules |
+
+You can split your config across multiple files using the `source` directive:
+
+```ini
+source = ~/.config/hypr/myColors.conf
+```
+
+## Setting your programs
+
+Near the top of the config, three variables control which programs your keybinds open:
+
+```ini
+$terminal = kitty
+$fileManager = dolphin
+$menu = hyprlauncher
+```
+
+Change these to match what you have installed. For example, if you use `alacritty`, `thunar`, and `wofi`:
+
+```ini
+$terminal = alacritty
+$fileManager = thunar
+$menu = wofi --show run
+```
+
+These variables are then referenced throughout the keybindings section, so changing them here updates every relevant bind at once.
+
+## Essential keybinds
+
+The default modifier key is `SUPER` (the Windows/Meta key), set at the top of the keybindings section:
+
+```ini
+$mainMod = SUPER
+```
+
+### Application and session controls
+
+| Keybind | Action |
+|---|---|
+| `SUPER + Q` | Open terminal (`$terminal`) |
+| `SUPER + E` | Open file manager (`$fileManager`) |
+| `SUPER + R` | Open launcher (`$menu`) |
+| `SUPER + C` | Close active window |
+| `SUPER + M` | Exit Hyprland |
+| `SUPER + V` | Toggle floating mode for active window |
+| `SUPER + P` | Toggle pseudotile (dwindle layout) |
+| `SUPER + J` | Toggle split direction (dwindle layout) |
+
+### Focus and navigation
+
+| Keybind | Action |
+|---|---|
+| `SUPER + ←` | Move focus left |
+| `SUPER + →` | Move focus right |
+| `SUPER + ↑` | Move focus up |
+| `SUPER + ↓` | Move focus down |
+
+### Workspaces
+
+| Keybind | Action |
+|---|---|
+| `SUPER + 1`–`0` | Switch to workspace 1–10 |
+| `SUPER + SHIFT + 1`–`0` | Move active window to workspace 1–10 |
+| `SUPER + S` | Toggle special workspace (scratchpad) |
+| `SUPER + SHIFT + S` | Move active window to special workspace |
+| `SUPER + Scroll Up` | Cycle to next workspace |
+| `SUPER + Scroll Down` | Cycle to previous workspace |
+
+### Mouse controls
+
+| Bind | Action |
+|---|---|
+| `SUPER + Left click + drag` | Move window |
+| `SUPER + Right click + drag` | Resize window |
+
+### Multimedia and brightness
+
+These binds use your keyboard's function keys and work without a modifier:
+
+```ini
+# Volume (requires wireplumber / wpctl)
+bindel = ,XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+
+bindel = ,XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindel = ,XF86AudioMute,        exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindel = ,XF86AudioMicMute,     exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+
+# Brightness (requires brightnessctl)
+bindel = ,XF86MonBrightnessUp,   exec, brightnessctl -e4 -n2 set 5%+
+bindel = ,XF86MonBrightnessDown, exec, brightnessctl -e4 -n2 set 5%-
+
+# Media control (requires playerctl)
+bindl = ,XF86AudioNext,  exec, playerctl next
+bindl = ,XF86AudioPause, exec, playerctl play-pause
+bindl = ,XF86AudioPlay,  exec, playerctl play-pause
+bindl = ,XF86AudioPrev,  exec, playerctl previous
+```
+
+## Monitor setup
+
+The default monitor line accepts any connected display at its preferred resolution and auto-detected position:
+
+```ini
+monitor=,preferred,auto,auto
+```
+
+The format is `monitor=name,resolution,position,scale`. For example, to configure two specific monitors:
+
+```ini
+# Primary monitor at 1920x1080, 60Hz, top-left, 1x scale
+monitor=DP-1,1920x1080@60,0x0,1
+
+# Secondary monitor at 2560x1440, 144Hz, to the right, 1x scale
+monitor=HDMI-A-1,2560x1440@144,1920x0,1
+```
+
+Run `hyprctl monitors` to list the names of your connected outputs.
+
+<Tip>
+Use `monitor=,preferred,auto,auto` as a catch-all fallback line after your named monitor entries. Hyprland applies monitor rules top-to-bottom and stops at the first match.
+</Tip>
+
+## Autostart applications
+
+Use `exec-once` to run commands when Hyprland starts. Place these in the `AUTOSTART` section of your config:
+
+```ini
+# Status bar
+exec-once = waybar
+
+# Wallpaper daemon
+exec-once = hyprpaper
+
+# Notification daemon
+exec-once = dunst
+
+# Network applet
+exec-once = nm-applet &
+
+# Authentication agent (needed for polkit prompts)
+exec-once = /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+```
+
+`exec-once` runs the command exactly once per Hyprland session. Use `exec` (without `-once`) in the same position if you want the command to re-run every time the config reloads.
+
+<Note>
+Programs that run as background daemons (like `nm-applet`) do not need a trailing `&` when launched with `exec-once` — Hyprland forks them automatically. Adding `&` is harmless but redundant.
+</Note>
+
+## Reloading the config
+
+Hyprland reloads `hyprland.conf` automatically the moment you save the file. You do not need to restart or send a signal.
+
+If you need to force a reload manually, run:
+
+```bash
+hyprctl reload
+```
+
+<Warning>
+Changes to the `permission` block inside the `ecosystem` section require a full Hyprland restart, not just a reload. This is by design for security reasons.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Variables" icon="sliders" href="/configuring/variables">
+    Explore all available config options: decoration, animations, input, layouts, and more.
+  </Card>
+  <Card title="Keybinds" icon="keyboard" href="/configuring/keybinds">
+    Learn bind flags, submaps, and how to create complex keybind sequences.
+  </Card>
+  <Card title="Monitors" icon="monitor" href="/configuring/monitors">
+    Fine-tune resolution, refresh rate, scale, and multi-monitor layout.
+  </Card>
+  <Card title="Window rules" icon="window" href="/configuring/window-rules">
+    Control how individual apps open, float, or are placed on workspaces.
+  </Card>
+</CardGroup>

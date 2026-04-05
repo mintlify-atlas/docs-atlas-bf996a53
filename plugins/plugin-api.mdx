@@ -1,0 +1,642 @@
+---
+title: "Plugin API reference"
+description: "Complete reference for every function in the HyprlandAPI namespace, plugin entry points, and supporting types."
+---
+
+This page documents every public symbol available to Hyprland plugins. All declarations come directly from `src/plugins/PluginAPI.hpp`.
+
+## Plugin entry points
+
+These are the functions your plugin `.so` must (or may) export. Use the `APICALL EXPORT` macros so the linker can find them.
+
+### `pluginAPIVersion` (required)
+
+```cpp
+APICALL EXPORT std::string pluginAPIVersion();
+```
+
+Called before `pluginInit`. Return `HYPRLAND_API_VERSION` (currently `"0.1"`). If the returned value does not match what Hyprland expects, the `.so` is ejected immediately and `pluginInit` is never called.
+
+Do not modify this function — copy it verbatim from the example plugin.
+
+### `pluginInit` (required)
+
+```cpp
+APICALL EXPORT PLUGIN_DESCRIPTION_INFO pluginInit(HANDLE handle);
+```
+
+Called when the plugin is loaded. `handle` is an opaque identifier for this plugin instance; store it and pass it to every `HyprlandAPI::` call.
+
+Return a `PLUGIN_DESCRIPTION_INFO` describing the plugin. This function runs synchronously on Hyprland's main thread — blocking operations will freeze the compositor.
+
+### `pluginExit` (optional)
+
+```cpp
+APICALL EXPORT void pluginExit();
+```
+
+Called when the plugin is intentionally unloaded by the user. Not called on error ejection. Registered hooks are cleaned up automatically after this function returns.
+
+---
+
+## Supporting types
+
+### `PLUGIN_DESCRIPTION_INFO`
+
+```cpp
+using PLUGIN_DESCRIPTION_INFO = struct {
+    std::string name;
+    std::string description;
+    std::string author;
+    std::string version;
+};
+```
+
+<ParamField path="name" type="std::string">
+  Display name of the plugin. Shown in `hyprpm list`.
+</ParamField>
+
+<ParamField path="description" type="std::string">
+  Short description of what the plugin does.
+</ParamField>
+
+<ParamField path="author" type="std::string">
+  Plugin author name.
+</ParamField>
+
+<ParamField path="version" type="std::string">
+  Plugin version string, e.g. `"1.0.0"`.
+</ParamField>
+
+### `SVersionInfo`
+
+```cpp
+struct SVersionInfo {
+    std::string hash;
+    std::string tag;
+    bool        dirty = false;
+    std::string branch;
+    std::string message;
+    std::string commits;
+};
+```
+
+<ParamField path="hash" type="std::string">
+  Full git commit hash of the running Hyprland build.
+</ParamField>
+
+<ParamField path="tag" type="std::string">
+  The git tag at this commit, if any.
+</ParamField>
+
+<ParamField path="dirty" type="bool">
+  `true` if the Hyprland build was made from a tree with uncommitted changes.
+</ParamField>
+
+<ParamField path="branch" type="std::string">
+  The git branch the build was made from.
+</ParamField>
+
+<ParamField path="message" type="std::string">
+  The commit message of the Hyprland build.
+</ParamField>
+
+<ParamField path="commits" type="std::string">
+  Number of commits on the branch, as a string.
+</ParamField>
+
+### `SFunctionMatch`
+
+```cpp
+struct SFunctionMatch {
+    void*       address = nullptr;
+    std::string signature;
+    std::string demangled;
+};
+```
+
+<ParamField path="address" type="void*">
+  Address of the matched function in the running Hyprland binary. Pass to `createFunctionHook`.
+</ParamField>
+
+<ParamField path="signature" type="std::string">
+  Raw mangled symbol name.
+</ParamField>
+
+<ParamField path="demangled" type="std::string">
+  Human-readable demangled name.
+</ParamField>
+
+---
+
+## Hash functions
+
+These two functions are used to verify that a plugin was compiled against the correct Hyprland version.
+
+### `__hyprland_api_get_hash`
+
+```cpp
+APICALL EXPORT const char* __hyprland_api_get_hash();
+```
+
+Exported by Hyprland. Returns the hash string that the running Hyprland binary was compiled with. Call `dlsym` or compare via `getHyprlandVersion`.
+
+### `__hyprland_api_get_client_hash`
+
+```cpp
+APICALL inline EXPORT const char* __hyprland_api_get_client_hash();
+```
+
+Defined inline in `PluginAPI.hpp` and compiled into the plugin. Returns the hash string corresponding to the Hyprland headers the plugin was compiled against. The hash encodes:
+
+- The Hyprland git commit hash
+- Aquamarine version (major.minor)
+- Hyprutils version (major.minor)
+- Hyprgraphics version (major.minor)
+- Hyprcursor version (major.minor)
+- Hyprlang version (major.minor)
+
+Compare `__hyprland_api_get_hash()` against `__hyprland_api_get_client_hash()` in `pluginInit` to detect version mismatches before doing any other work.
+
+---
+
+## Config
+
+### `addConfigValue`
+
+```cpp
+APICALL bool addConfigValue(HANDLE handle, const std::string& name, const Hyprlang::CConfigValue& value);
+```
+
+Registers a new configuration variable. May only be called inside `pluginInit`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle received in `pluginInit`.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  Full config key name. **Must** begin with `plugin:`. Example: `"plugin:myplugin:opacity"`.
+</ParamField>
+
+<ParamField path="value" type="const Hyprlang::CConfigValue&" required>
+  Default value. Use Hyprlang types such as `Hyprlang::FLOAT{1.0f}`, `Hyprlang::INT{0}`, `Hyprlang::STRING{"default"}`. See the [Hyprlang docs](https://hypr.land/hyprlang/) for all available types.
+</ParamField>
+
+Returns `true` on success, `false` on failure (e.g. called outside `pluginInit`, or name does not start with `plugin:`).
+
+<Note>
+  Register **all** config values before calling `getConfigValue`. Calling `addConfigValue` after `getConfigValue` invalidates previously returned pointers.
+</Note>
+
+### `addConfigKeyword`
+
+```cpp
+APICALL bool addConfigKeyword(HANDLE handle, const std::string& name, Hyprlang::PCONFIGHANDLERFUNC fn, Hyprlang::SHandlerOptions opts);
+```
+
+Registers a custom config keyword with a handler function. May only be called inside `pluginInit`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The keyword name as it will appear in `hyprland.conf`.
+</ParamField>
+
+<ParamField path="fn" type="Hyprlang::PCONFIGHANDLERFUNC" required>
+  Handler function called when Hyprland parses this keyword. Signature is defined by Hyprlang.
+</ParamField>
+
+<ParamField path="opts" type="Hyprlang::SHandlerOptions" required>
+  Handler options defined by Hyprlang (e.g. whether the keyword allows multiple values).
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+### `getConfigValue`
+
+```cpp
+APICALL Hyprlang::CConfigValue* getConfigValue(HANDLE handle, const std::string& name);
+```
+
+Returns a pointer to a registered config value. The pointer is valid for the lifetime of the plugin, unless another `addConfigValue` call is made afterward. Cache it as a `static` to avoid repeated lookups.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The full config key name, including the `plugin:` prefix.
+</ParamField>
+
+Returns a `Hyprlang::CConfigValue*` on success, `nullptr` on error.
+
+---
+
+## Dispatchers
+
+### `addDispatcherV2`
+
+```cpp
+APICALL bool addDispatcherV2(HANDLE handle, const std::string& name, std::function<SDispatchResult(std::string)> handler);
+```
+
+Registers a keybind dispatcher. Once registered, users can bind keys to it with `bind = ..., name, arg` in `hyprland.conf`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The dispatcher name as used in `bind`.
+</ParamField>
+
+<ParamField path="handler" type="std::function<SDispatchResult(std::string)>" required>
+  Function called when the dispatcher is triggered. The `std::string` argument is the argument portion of the bind. Return `SDispatchResult{}` on success.
+</ParamField>
+
+Returns `true` on success, `false` on failure (e.g. a dispatcher with this name already exists).
+
+### `removeDispatcher`
+
+```cpp
+APICALL bool removeDispatcher(HANDLE handle, const std::string& name);
+```
+
+Removes a previously registered dispatcher.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The dispatcher name to remove.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+<Warning>
+  `addDispatcher` (accepting `std::function<void(std::string)>`) is **deprecated**. Use `addDispatcherV2` for all new plugins.
+</Warning>
+
+---
+
+## Layouts
+
+### `addTiledAlgo`
+
+```cpp
+APICALL bool addTiledAlgo(HANDLE handle, const std::string& name, const std::type_info* typeInfo, std::function<UP<Layout::ITiledAlgorithm>()>&& factory);
+```
+
+Registers a custom tiled layout algorithm that users can select with `general:layout = name` in their config.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The layout name as it will appear in config.
+</ParamField>
+
+<ParamField path="typeInfo" type="const std::type_info*" required>
+  Type info for the algorithm class: pass `&typeid(MyAlgoClass)`.
+</ParamField>
+
+<ParamField path="factory" type="std::function<UP<Layout::ITiledAlgorithm>()>&&" required>
+  A factory function that returns a new instance of the algorithm as a `unique_ptr`.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+### `addFloatingAlgo`
+
+```cpp
+APICALL bool addFloatingAlgo(HANDLE handle, const std::string& name, const std::type_info* typeInfo, std::function<UP<Layout::IFloatingAlgorithm>()>&& factory);
+```
+
+Registers a custom floating layout algorithm. Parameters and return value are identical to `addTiledAlgo`, but the factory must return a `Layout::IFloatingAlgorithm`.
+
+### `removeAlgo`
+
+```cpp
+APICALL bool removeAlgo(HANDLE handle, const std::string& name);
+```
+
+Removes a previously registered tiled or floating layout algorithm.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  The layout name to remove.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+<Warning>
+  `addLayout` and `removeLayout` (operating on `IHyprLayout*`) are **deprecated**. Use `addTiledAlgo` / `addFloatingAlgo` / `removeAlgo` for all new plugins.
+</Warning>
+
+---
+
+## Function hooks
+
+<Warning>
+  Function hooks bypass the stable API and operate directly on internal Hyprland machine code. Internal functions can be renamed, removed, or have their signatures changed in any Hyprland release. Prefer `HyprlandAPI::` functions where they cover your use case.
+</Warning>
+
+### `createFunctionHook`
+
+```cpp
+APICALL CFunctionHook* createFunctionHook(HANDLE handle, const void* source, const void* destination);
+```
+
+Creates a trampoline hook that redirects calls to `source` to `destination` instead. After creation, call `hook->hook()` to activate it. The original function remains callable through `hook->m_original`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="source" type="const void*" required>
+  Address of the original Hyprland function to hook. Obtain this from `findFunctionsByName`.
+</ParamField>
+
+<ParamField path="destination" type="const void*" required>
+  Address of your replacement function.
+</ParamField>
+
+Returns a `CFunctionHook*` owned by Hyprland. Do not `delete` it yourself; use `removeFunctionHook`.
+
+### `removeFunctionHook`
+
+```cpp
+APICALL bool removeFunctionHook(HANDLE handle, CFunctionHook* hook);
+```
+
+Deactivates and destroys a function hook. If the hook is currently active, it is automatically unhooked first.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="hook" type="CFunctionHook*" required>
+  The hook to remove, as returned by `createFunctionHook`.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+### `findFunctionsByName`
+
+```cpp
+APICALL std::vector<SFunctionMatch> findFunctionsByName(HANDLE handle, const std::string& name);
+```
+
+Searches the Hyprland binary's symbol table for functions whose demangled name contains `name` as a substring. Returns all matches.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="name" type="const std::string&" required>
+  Partial or full function name to search for.
+</ParamField>
+
+Returns a `std::vector<SFunctionMatch>`. Empty if no matches are found or the handle is invalid.
+
+Addresses returned here are stable for the process lifetime — cache them as `static` variables. Lookups are slow (full symbol table scan); do not call this in a hot path.
+
+---
+
+## Window decorations
+
+### `addWindowDecoration`
+
+```cpp
+APICALL bool addWindowDecoration(HANDLE handle, PHLWINDOW pWindow, UP<IHyprWindowDecoration> pDecoration);
+```
+
+Attaches a custom decoration to a window. Hyprland takes ownership of the decoration via the `unique_ptr`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="pWindow" type="PHLWINDOW" required>
+  The window to attach the decoration to.
+</ParamField>
+
+<ParamField path="pDecoration" type="UP<IHyprWindowDecoration>" required>
+  A `unique_ptr` to your decoration instance. Hyprland owns it after this call.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+### `removeWindowDecoration`
+
+```cpp
+APICALL bool removeWindowDecoration(HANDLE handle, IHyprWindowDecoration* pDecoration);
+```
+
+Removes and destroys a decoration that was previously added with `addWindowDecoration`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="pDecoration" type="IHyprWindowDecoration*" required>
+  Raw pointer to the decoration to remove. After this call the pointer is invalid.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+---
+
+## Notifications
+
+### `addNotificationV2`
+
+```cpp
+APICALL bool addNotificationV2(HANDLE handle, const std::unordered_map<std::string, std::any>& data);
+```
+
+Displays an on-screen Hyprland notification.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="data" type="const std::unordered_map<std::string, std::any>&" required>
+  A map of notification fields (see below).
+</ParamField>
+
+**Required keys in `data`:**
+
+| Key | Type | Description |
+|---|---|---|
+| `"text"` | `std::string` or `const char*` | The notification message. |
+| `"time"` | `uint64_t` | Display duration in milliseconds. |
+| `"color"` | `CHyprColor` | Background color. Pass `CHyprColor{0}` to use the default color for the icon. |
+
+**Optional keys in `data`:**
+
+| Key | Type | Description |
+|---|---|---|
+| `"icon"` | `eIcons` | Notification icon (e.g. `ICON_OK`, `ICON_ERROR`, `ICON_WARNING`). |
+
+Returns `true` on success, `false` on failure.
+
+<Note>
+  `addNotification` (the older overload accepting `text`, `color`, and `timeMs` directly) is still present but superseded by `addNotificationV2`.
+</Note>
+
+---
+
+## IPC / hyprctl
+
+### `invokeHyprctlCommand`
+
+```cpp
+APICALL std::string invokeHyprctlCommand(const std::string& call, const std::string& args, const std::string& format = "");
+```
+
+Executes a `hyprctl` command from within the plugin and returns the output as a string. This is the correct way to issue hyprctl commands from `pluginInit` (where `system("hyprctl ...")` would block).
+
+<ParamField path="call" type="const std::string&" required>
+  The hyprctl command name, e.g. `"dispatch"`, `"keyword"`, `"activewindow"`.
+</ParamField>
+
+<ParamField path="args" type="const std::string&" required>
+  Arguments to pass to the command.
+</ParamField>
+
+<ParamField path="format" type="const std::string&">
+  Output format. Accepts `""` (default text), `"json"`, or other formats supported by the command.
+</ParamField>
+
+Returns the command output as a string.
+
+### `registerHyprCtlCommand`
+
+```cpp
+APICALL SP<SHyprCtlCommand> registerHyprCtlCommand(HANDLE handle, SHyprCtlCommand cmd);
+```
+
+Registers a custom `hyprctl` command that users can invoke as `hyprctl <cmd.name>`.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="cmd" type="SHyprCtlCommand" required>
+  Command descriptor. Set `cmd.name` to the command name and `cmd.fn` to a handler with the signature `std::string(eHyprCtlOutputFormat, std::string)`.
+</ParamField>
+
+Returns a `SP<SHyprCtlCommand>` on success, `nullptr` on failure. Keep this shared pointer alive for as long as the command should be active — the command is automatically unregistered when the last reference is released.
+
+### `unregisterHyprCtlCommand`
+
+```cpp
+APICALL bool unregisterHyprCtlCommand(HANDLE handle, SP<SHyprCtlCommand> cmd);
+```
+
+Explicitly unregisters a hyprctl command before its shared pointer goes out of scope.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+<ParamField path="cmd" type="SP<SHyprCtlCommand>" required>
+  The shared pointer returned by `registerHyprCtlCommand`.
+</ParamField>
+
+Returns `true` on success, `false` on failure.
+
+---
+
+## System
+
+### `getHyprlandVersion`
+
+```cpp
+APICALL SVersionInfo getHyprlandVersion(HANDLE handle);
+```
+
+Returns version information about the running Hyprland binary. Compare `SVersionInfo::hash` against `__hyprland_api_get_client_hash()` to verify compatibility.
+
+<ParamField path="handle" type="HANDLE" required>
+  The plugin handle.
+</ParamField>
+
+Returns a populated `SVersionInfo` struct.
+
+### `reloadConfig`
+
+```cpp
+APICALL bool reloadConfig();
+```
+
+Queues a Hyprland config reload. The reload does not take effect immediately — it is scheduled for the next safe point in the event loop.
+
+Returns `true` on success, `false` on failure.
+
+---
+
+## Deprecated functions
+
+The following functions are kept for backward compatibility but should not be used in new plugins.
+
+<AccordionGroup>
+  <Accordion title="registerCallbackDynamic (deprecated)">
+
+```cpp
+[[deprecated]] [[nodiscard]]
+APICALL SP<HOOK_CALLBACK_FN> registerCallbackDynamic(HANDLE handle, const std::string& event, HOOK_CALLBACK_FN fn);
+```
+
+Previously used to subscribe to compositor events. Has no effect in current Hyprland versions. Use `Event::bus()` directly instead.
+
+  </Accordion>
+  <Accordion title="unregisterCallback (deprecated)">
+
+```cpp
+[[deprecated]]
+APICALL bool unregisterCallback(HANDLE handle, SP<HOOK_CALLBACK_FN> fn);
+```
+
+Counterpart to `registerCallbackDynamic`. No longer functional. Reset or drop the `SP` returned by `registerCallbackDynamic` instead.
+
+  </Accordion>
+  <Accordion title="addDispatcher (deprecated)">
+
+```cpp
+[[deprecated]]
+APICALL bool addDispatcher(HANDLE handle, const std::string& name, std::function<void(std::string)> handler);
+```
+
+The void-returning dispatcher overload. Use `addDispatcherV2` (which returns `SDispatchResult`) instead.
+
+  </Accordion>
+  <Accordion title="addLayout / removeLayout (deprecated)">
+
+```cpp
+[[deprecated]] APICALL bool addLayout(HANDLE handle, const std::string& name, IHyprLayout* layout);
+[[deprecated]] APICALL bool removeLayout(HANDLE handle, IHyprLayout* layout);
+```
+
+The old layout registration API operating on raw `IHyprLayout*` pointers. Use `addTiledAlgo`, `addFloatingAlgo`, and `removeAlgo` instead.
+
+  </Accordion>
+  <Accordion title="getFunctionAddressFromSignature (deprecated)">
+
+```cpp
+[[deprecated]]
+APICALL void* getFunctionAddressFromSignature(HANDLE handle, const std::string& sig);
+```
+
+Looked up a function by its exact mangled symbol. Superseded by `findFunctionsByName`, which accepts a partial demangled name and returns all matches.
+
+  </Accordion>
+</AccordionGroup>

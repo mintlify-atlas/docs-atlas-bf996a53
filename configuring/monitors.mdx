@@ -1,0 +1,244 @@
+---
+title: 'Monitors'
+description: 'Configure monitor resolution, position, scale, rotation, mirroring, and more in Hyprland.'
+keywords: ['hyprland', 'monitors', 'display', 'resolution', 'scale', 'rotation', 'mirror']
+---
+
+## Monitor syntax
+
+```
+monitor = NAME, RESOLUTION, POSITION, SCALE [, OPTIONS...]
+```
+
+| Field | Description |
+|-------|-------------|
+| `NAME` | Output connector name (e.g. `DP-1`, `HDMI-A-1`) or empty for catch-all |
+| `RESOLUTION` | Resolution and optional refresh rate |
+| `POSITION` | Screen position or `auto` directive |
+| `SCALE` | Display scaling factor or `auto` |
+| `OPTIONS` | Optional: `transform`, `mirror`, `bitdepth`, `vrr`, `cm`, `icc` |
+
+Find your monitor names with:
+
+```bash
+hyprctl monitors all
+# or
+wl-randr
+```
+
+## The catch-all rule
+
+```ini
+monitor = , preferred, auto, auto
+```
+
+This applies to any connected monitor not matched by a more specific rule. It uses the monitor's preferred resolution, automatic position placement, and automatic scaling. Put more specific rules before the catch-all:
+
+```ini
+monitor = DP-1, 2560x1440@144, 0x0, 1
+monitor = HDMI-A-1, 1920x1080@60, 2560x0, 1
+monitor = , preferred, auto, auto    # everything else
+```
+
+## Resolution
+
+<Tabs>
+  <Tab title="Explicit">
+    Specify width, height, and optionally refresh rate:
+
+    ```ini
+    monitor = DP-1, 1920x1080@60, 0x0, 1
+    monitor = DP-1, 2560x1440@144, 0x0, 1
+    monitor = DP-1, 3840x2160@60, 0x0, 2
+    ```
+
+    Omit `@RATE` to use the highest available refresh rate at that resolution.
+  </Tab>
+  <Tab title="Keywords">
+    | Value | Description |
+    |-------|-------------|
+    | `preferred` | Use the monitor's preferred resolution |
+    | `highrr` | Highest available refresh rate |
+    | `highres` | Highest available resolution |
+    | `maxwidth` | Highest resolution up to the maximum width |
+
+    ```ini
+    monitor = DP-1, highrr, 0x0, 1
+    monitor = HDMI-A-1, highres, auto, auto
+    ```
+  </Tab>
+  <Tab title="Modeline">
+    For custom timing, provide a full DRM modeline:
+
+    ```ini
+    monitor = DP-1, modeline 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync, 0x0, 1
+    ```
+  </Tab>
+</Tabs>
+
+## Position
+
+<Tabs>
+  <Tab title="Absolute">
+    Specify pixel coordinates from the top-left corner of the virtual screen:
+
+    ```ini
+    monitor = DP-1, 1920x1080@60, 0x0, 1       # primary, top-left
+    monitor = HDMI-A-1, 1920x1080@60, 1920x0, 1  # to the right
+    monitor = DP-2, 1920x1080@60, 0x1080, 1    # below
+    ```
+  </Tab>
+  <Tab title="Auto">
+    Let Hyprland position the monitor automatically:
+
+    | Value | Description |
+    |-------|-------------|
+    | `auto` or `auto-right` | Place to the right of existing monitors |
+    | `auto-left` | Place to the left |
+    | `auto-up` | Place above |
+    | `auto-down` | Place below |
+    | `auto-center-right` | Center-align, place to the right |
+    | `auto-center-left` | Center-align, place to the left |
+    | `auto-center-up` | Center-align, place above |
+    | `auto-center-down` | Center-align, place below |
+
+    ```ini
+    monitor = DP-1, 2560x1440@144, 0x0, 1
+    monitor = HDMI-A-1, 1920x1080@60, auto-right, 1
+    ```
+  </Tab>
+</Tabs>
+
+## Scale
+
+```ini
+monitor = DP-1, 2560x1440@144, 0x0, 1.5
+monitor = DP-2, 3840x2160@60, 0x0, 2
+monitor = HDMI-A-1, 1920x1080@60, 1920x0, auto
+```
+
+| Value | Description |
+|-------|-------------|
+| Numeric (e.g. `1`, `1.5`, `2`) | Fixed scale factor |
+| `auto` | Hyprland picks a scale based on physical size and resolution |
+
+<Tip>
+  Fractional scaling (e.g. `1.25`, `1.5`) works best with `xwayland:force_zero_scaling = true` when running XWayland applications. Some apps may render blurry at non-integer scales.
+</Tip>
+
+## Transform / rotation
+
+Add `transform N` as an option where N is 0–7:
+
+| Value | Rotation |
+|-------|----------|
+| `0` | Normal (0°) |
+| `1` | 90° clockwise |
+| `2` | 180° |
+| `3` | 270° clockwise (90° counter-clockwise) |
+| `4` | Flipped |
+| `5` | Flipped + 90° |
+| `6` | Flipped + 180° |
+| `7` | Flipped + 270° |
+
+```ini
+monitor = DP-1, 1920x1080@60, 0x0, 1, transform, 1
+```
+
+You can also apply a transform after the initial rule:
+
+```ini
+monitor = DP-1, transform, 1
+```
+
+## Mirroring
+
+Mirror one monitor to another:
+
+```ini
+monitor = HDMI-A-1, 1920x1080@60, 0x0, 1, mirror, DP-1
+```
+
+The second monitor (`HDMI-A-1`) will display the same content as the source (`DP-1`). The mirrored monitor does not have an independent workspace.
+
+## Disabling a monitor
+
+```ini
+monitor = DP-3, disable
+```
+
+This disconnects the monitor from the compositor. Windows on that monitor are moved to another workspace.
+
+## Additional options
+
+These are appended as keyword-value pairs after the scale:
+
+| Option | Description |
+|--------|-------------|
+| `mirror, NAME` | Mirror from the named monitor |
+| `transform, N` | Apply a rotation/flip transform (0–7) |
+| `bitdepth, N` | Set bit depth (`8` or `10`) |
+| `vrr, N` | Per-monitor VRR override (0=off, 1=on, 2=auto) |
+| `cm, VALUE` | Color management mode (`auto`, `srgb`, `hdr`, etc.) |
+| `sdrbrightness, N` | SDR content brightness for HDR monitors |
+| `sdrsaturation, N` | SDR content saturation for HDR monitors |
+| `icc, PATH` | Path to an ICC color profile file |
+
+```ini
+monitor = DP-1, 3840x2160@120, 0x0, 2, bitdepth, 10, vrr, 1
+```
+
+## Reserved area
+
+Reserve screen edges for bars and panels:
+
+```ini
+monitor = DP-1, addreserved, TOP, BOTTOM, LEFT, RIGHT
+```
+
+Values are in pixels. Most status bars (Waybar, etc.) handle this automatically via the layer-shell protocol.
+
+## Runtime changes with wl-randr
+
+To change monitor settings at runtime without editing your config:
+
+```bash
+# List outputs
+wl-randr
+
+# Set resolution and refresh rate
+wl-randr --output DP-1 --mode 2560x1440@144
+
+# Move an output
+wl-randr --output HDMI-A-1 --pos 2560,0
+
+# Disable an output
+wl-randr --output HDMI-A-1 --off
+```
+
+<Note>
+  `wl-randr` changes are not persistent. Edit your `hyprland.conf` for permanent configuration.
+</Note>
+
+You can also use `hyprctl output` to create or remove virtual outputs:
+
+```bash
+hyprctl output create headless
+hyprctl output remove HEADLESS-1
+```
+
+## Example multi-monitor setup
+
+```ini
+# Primary 1440p 144 Hz monitor
+monitor = DP-1, 2560x1440@144, 0x0, 1
+
+# Secondary 1080p monitor to the right
+monitor = HDMI-A-1, 1920x1080@60, 2560x0, 1
+
+# Laptop internal display — rotated portrait, to the left
+monitor = eDP-1, 1920x1200@60, -1200x0, 1.5, transform, 1
+
+# Catch-all for hotplugged monitors
+monitor = , preferred, auto, auto
+```

@@ -1,0 +1,313 @@
+---
+title: "Developing plugins"
+description: "Write a Hyprland plugin in C++: required entry points, the plugin API, hooking, events, and building."
+---
+
+Hyprland plugins are shared libraries loaded into the Hyprland process at runtime. They are written in C++ and compiled with the same compiler and flags as Hyprland itself.
+
+<Warning>
+  The plugin API passes C++ objects across the library boundary. There is **no ABI stability guarantee**. Always compile plugins on the same machine and with the same compiler version as the Hyprland binary they will run against.
+</Warning>
+
+## Plugin entry points
+
+Every plugin must export three C functions. Use the `APICALL` and `EXPORT` macros defined in `PluginAPI.hpp` to prevent symbol mangling and ensure visibility.
+
+### Required: `pluginAPIVersion`
+
+Called before `pluginInit`. Hyprland uses the return value to check version compatibility. If the hash does not match, the `.so` is ejected immediately.
+
+```cpp
+APICALL EXPORT std::string PLUGIN_API_VERSION() {
+    return HYPRLAND_API_VERSION;
+}
+```
+
+Do not modify this function. `HYPRLAND_API_VERSION` is defined in `PluginAPI.hpp` as the string `"0.1"`.
+
+### Required: `pluginInit`
+
+Called when the plugin is loaded. Receives a `HANDLE` (an opaque `void*`) that identifies this plugin for all subsequent API calls. Must return a filled `PLUGIN_DESCRIPTION_INFO` struct.
+
+```cpp
+APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
+    PHANDLE = handle;
+
+    // Register config values, dispatchers, hooks, etc. here.
+
+    return {"My Plugin", "Does something useful", "Your Name", "1.0"};
+}
+```
+
+`pluginInit` is called synchronously on Hyprland's main thread. Blocking calls (such as `system("hyprctl ...")`) will hang the compositor — use `HyprlandAPI::invokeHyprctlCommand` instead.
+
+### Optional: `pluginExit`
+
+Called when the plugin is intentionally unloaded by the user. Not called when the plugin is ejected due to an error. All registered hooks are cleaned up automatically after this function returns.
+
+```cpp
+APICALL EXPORT void PLUGIN_EXIT() {
+    // Perform any cleanup here.
+}
+```
+
+## PLUGIN_DESCRIPTION_INFO
+
+The struct returned by `pluginInit`:
+
+```cpp
+using PLUGIN_DESCRIPTION_INFO = struct {
+    std::string name;        // Display name shown in hyprpm list
+    std::string description; // Short description of what the plugin does
+    std::string author;      // Author name
+    std::string version;     // Plugin version string (e.g. "1.0.0")
+};
+```
+
+## Minimal plugin skeleton
+
+```cpp
+#include <hyprland/src/plugins/PluginAPI.hpp>
+
+// Keep a copy of the handle for API calls after pluginInit.
+static HANDLE PHANDLE = nullptr;
+
+APICALL EXPORT std::string PLUGIN_API_VERSION() {
+    return HYPRLAND_API_VERSION;
+}
+
+APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
+    PHANDLE = handle;
+
+    // Verify the running Hyprland matches what we compiled against.
+    const auto HASH = __hyprland_api_get_hash();
+    if (std::string{HASH} != __hyprland_api_get_client_hash()) {
+        HyprlandAPI::addNotificationV2(handle, {
+            {"text",  std::string{"Plugin compiled for a different Hyprland version!"}},
+            {"time",  (uint64_t)5000},
+            {"color", CHyprColor{0}},
+        });
+        throw std::runtime_error("Version mismatch");
+    }
+
+    return {"My Plugin", "A minimal example", "Your Name", "1.0"};
+}
+
+APICALL EXPORT void PLUGIN_EXIT() {
+    // nothing to clean up
+}
+```
+
+## Build setup
+
+Plugins are typically built with CMake. The Hyprland headers must be available, either installed system-wide by your package manager or placed manually.
+
+```cmake
+cmake_minimum_required(VERSION 3.19)
+project(my-plugin)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_SHARED_LIBRARY_PREFIX "")
+
+# Hyprland installs headers to a pkgconfig-discoverable path.
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(HYPRLAND REQUIRED hyprland)
+
+add_library(my-plugin SHARED main.cpp)
+
+target_include_directories(my-plugin PRIVATE ${HYPRLAND_INCLUDE_DIRS})
+target_compile_options(my-plugin PRIVATE ${HYPRLAND_CFLAGS_OTHER} -fPIC)
+
+# hyprpm passes the correct version defines when building.
+```
+
+Build with `hyprpm add` (which invokes the build steps from the repository manifest) or manually with CMake when iterating locally.
+
+## Version compatibility check
+
+The `__hyprland_api_get_client_hash()` function, defined inline in `PluginAPI.hpp`, returns a string encoding the Hyprland commit hash plus the versions of all critical dependencies. Call it in `pluginInit` and compare it against `__hyprland_api_get_hash()` (exported by Hyprland itself) to detect mismatches early:
+
+```cpp
+if (std::string{__hyprland_api_get_hash()} != __hyprland_api_get_client_hash()) {
+    throw std::runtime_error("Hyprland version mismatch — recompile the plugin");
+}
+```
+
+The hash includes Aquamarine, Hyprutils, Hyprgraphics, Hyprcursor, and Hyprlang version components, so a dependency update alone can change it.
+
+## Adding config values
+
+Config values must live in the `plugin:` namespace. Register them in `pluginInit`, then read them at any later point.
+
+```cpp
+// In pluginInit:
+HyprlandAPI::addConfigValue(handle, "plugin:myplugin:opacity", Hyprlang::FLOAT{1.0f});
+HyprlandAPI::addConfigValue(handle, "plugin:myplugin:enabled", Hyprlang::INT{1});
+
+// Reading a value later:
+static auto* const POPACITY = (Hyprlang::FLOAT* const*)
+    HyprlandAPI::getConfigValue(handle, "plugin:myplugin:opacity");
+float opacity = **POPACITY;
+```
+
+<Note>
+  `getConfigValue` returns a pointer that is valid for the lifetime of the plugin, unless another `addConfigValue` call is made afterward. Cache the result as a `static` pointer to avoid repeated lookups.
+</Note>
+
+See the [Hyprlang documentation](https://hypr.land/hyprlang/) for the full list of supported config value types.
+
+## Adding dispatchers
+
+Dispatchers are named actions that can be bound to keys in `hyprland.conf` with `bind = ..., myaction, arg`.
+
+```cpp
+// Return SDispatchResult to signal success or failure.
+SDispatchResult myDispatcher(std::string arg) {
+    // Do something with arg.
+    return SDispatchResult{};
+}
+
+// In pluginInit:
+HyprlandAPI::addDispatcherV2(handle, "myaction", myDispatcher);
+```
+
+Remove a dispatcher when it is no longer needed (or rely on automatic cleanup at plugin exit):
+
+```cpp
+HyprlandAPI::removeDispatcher(handle, "myaction");
+```
+
+<Warning>
+  The older `addDispatcher` overload (accepting `std::function<void(std::string)>`) is deprecated. Use `addDispatcherV2` for all new plugins.
+</Warning>
+
+## Subscribing to events
+
+Hyprland exposes an event bus. Use `Event::bus()` to subscribe to compositor events:
+
+```cpp
+#include <hyprland/src/helpers/signal/Signal.hpp>
+
+// In pluginInit:
+static auto listener = LISTENER_CB(onWindowOpen) {
+    // data is the event payload — cast to the appropriate type.
+};
+
+Event::bus().addListener<SWindowOpenEvent>(listener);
+```
+
+<Note>
+  The older `HyprlandAPI::registerCallbackDynamic` function is deprecated. Use `Event::bus()` directly for all new plugins.
+</Note>
+
+## Adding window decorations
+
+Window decorations are rendered alongside a window (borders, titlebars, shadows, etc.). Implement `IHyprWindowDecoration` and add an instance to a window:
+
+```cpp
+class MyDecoration : public IHyprWindowDecoration {
+  public:
+    // ... implement the required virtual methods ...
+};
+
+// In pluginInit or when a new window opens:
+HyprlandAPI::addWindowDecoration(handle, pWindow,
+    std::make_unique<MyDecoration>(pWindow));
+```
+
+Remove a decoration:
+
+```cpp
+HyprlandAPI::removeWindowDecoration(handle, pDecoration.get());
+```
+
+## Function hooking
+
+Function hooks let you intercept and replace internal Hyprland functions at the machine-code level using a trampoline mechanism.
+
+```cpp
+// 1. Find the target function by partial name match.
+auto matches = HyprlandAPI::findFunctionsByName(handle, "renderWindow");
+if (matches.empty()) throw std::runtime_error("Function not found");
+
+// 2. Create the hook.
+static CFunctionHook* g_hook = nullptr;
+g_hook = HyprlandAPI::createFunctionHook(handle,
+    matches[0].address,   // source — address of the original function
+    (void*)&myHookFn      // destination — your replacement
+);
+
+// 3. Activate the hook.
+g_hook->hook();
+
+// Inside your replacement, call the original through the trampoline:
+using FuncType = void(*)(/* original args */);
+reinterpret_cast<FuncType>(g_hook->m_original)(/* args */);
+```
+
+Remove and deactivate a hook:
+
+```cpp
+HyprlandAPI::removeFunctionHook(handle, g_hook);
+```
+
+<Warning>
+  Function hooks are not covered by any API stability guarantee. Internal Hyprland functions can be renamed, removed, or have their signatures changed at any time. Prefer the documented `HyprlandAPI::` functions wherever they provide the functionality you need.
+</Warning>
+
+## Registering hyprctl commands
+
+Expose a custom `hyprctl` subcommand that users can call with `hyprctl myplugin-cmd`:
+
+```cpp
+SHyprCtlCommand cmd;
+cmd.name    = "myplugin-cmd";
+cmd.fn      = [](eHyprCtlOutputFormat format, std::string args) -> std::string {
+    return "hello from myplugin";
+};
+
+auto cmdHandle = HyprlandAPI::registerHyprCtlCommand(handle, cmd);
+
+// To unregister later:
+HyprlandAPI::unregisterHyprCtlCommand(handle, cmdHandle);
+```
+
+## Adding layout algorithms
+
+Register a custom tiling or floating layout algorithm:
+
+```cpp
+// Tiled layout
+HyprlandAPI::addTiledAlgo(handle, "my-tiled",
+    &typeid(MyTiledAlgorithm),
+    []() -> UP<Layout::ITiledAlgorithm> {
+        return std::make_unique<MyTiledAlgorithm>();
+    }
+);
+
+// Floating layout
+HyprlandAPI::addFloatingAlgo(handle, "my-floating",
+    &typeid(MyFloatingAlgorithm),
+    []() -> UP<Layout::IFloatingAlgorithm> {
+        return std::make_unique<MyFloatingAlgorithm>();
+    }
+);
+
+// Remove by name
+HyprlandAPI::removeAlgo(handle, "my-tiled");
+```
+
+## Sending notifications
+
+Display an on-screen notification using the Hyprland notification system:
+
+```cpp
+HyprlandAPI::addNotificationV2(handle, {
+    {"text",  std::string{"Plugin loaded successfully!"}},
+    {"time",  (uint64_t)3000},   // milliseconds
+    {"color", CHyprColor{0}},    // 0 = default color for the icon
+    // {"icon", eIcons::ICON_OK},  // optional
+});
+```
+
+Required keys: `text` (`std::string` or `const char*`), `time` (`uint64_t`), `color` (`CHyprColor`). `icon` is optional (`eIcons` enum).

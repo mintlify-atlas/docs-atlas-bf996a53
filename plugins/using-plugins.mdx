@@ -1,0 +1,191 @@
+---
+title: "Using plugins"
+description: "Install, manage, and load Hyprland plugins with hyprpm, the built-in plugin manager."
+---
+
+Hyprland plugins are shared libraries (`.so` files) that extend the compositor at runtime. They can add new layout algorithms, window decorations, keybind dispatchers, configuration options, hyprctl commands, and hook into internal Hyprland functions — all without recompiling Hyprland itself.
+
+<Note>
+  Plugins are compiled C++ code that runs inside the Hyprland process. Because there is no ABI stability guarantee, a plugin must be compiled against the exact same Hyprland version it will run with. `hyprpm` handles this automatically.
+</Note>
+
+## hyprpm
+
+`hyprpm` is the official Hyprland plugin manager. It ships with Hyprland — no separate installation is needed.
+
+`hyprpm` clones plugin repositories from git, builds them against the correct Hyprland headers, and tracks enabled/disabled state across restarts.
+
+## Installing a plugin
+
+<Steps>
+  <Step title="Add the repository">
+    Pass the git URL of a plugin repository to `hyprpm add`. `hyprpm` will clone the repo, fetch the matching Hyprland headers, and build every plugin defined in the repository's manifest.
+
+    ```bash
+    hyprpm add https://github.com/example/hyprland-plugin
+    ```
+
+    You can also lock to a specific git revision:
+
+    ```bash
+    hyprpm add https://github.com/example/hyprland-plugin <git-rev>
+    ```
+  </Step>
+  <Step title="Enable the plugin">
+    After adding a repository, enable the plugins you want by name or by `author/name`:
+
+    ```bash
+    hyprpm enable my-plugin
+    hyprpm enable author/my-plugin
+    ```
+
+    `hyprpm enable` immediately loads the plugin into the running Hyprland session.
+  </Step>
+  <Step title="Verify">
+    Check that the plugin loaded correctly:
+
+    ```bash
+    hyprpm list
+    ```
+  </Step>
+</Steps>
+
+## Commands
+
+<CodeGroup>
+
+```bash Add a plugin repository
+hyprpm add <git-url>
+hyprpm add <git-url> <git-rev>
+```
+
+```bash List installed plugins
+hyprpm list
+```
+
+```bash Enable / disable a plugin
+hyprpm enable <name|author/name>
+hyprpm disable <name|author/name>
+```
+
+```bash Update all plugins
+hyprpm update
+```
+
+```bash Reload to match enabled state
+hyprpm reload
+```
+
+```bash Remove a plugin repository
+hyprpm remove <url|name|author/name>
+```
+
+```bash Remove hyprpm cache entirely
+hyprpm purge-cache
+```
+
+</CodeGroup>
+
+### Command details
+
+**`hyprpm add <git-url> [git-rev]`** — Clones the repository and builds all plugins defined in its manifest. If a `git-rev` is provided, commit locks in the manifest are ignored and that specific revision is checked out.
+
+**`hyprpm list`** — Lists every installed repository and the plugins it contains, along with their enabled/disabled state.
+
+**`hyprpm enable <plugin>`** — Marks the plugin as enabled and loads it into the running session. Accepts the plugin name or `author/name`.
+
+**`hyprpm disable <plugin>`** — Marks the plugin as disabled and unloads it from the running session.
+
+**`hyprpm update`** — Pulls the latest commits for every installed repository and rebuilds any plugin whose source has changed. Also updates Hyprland headers if needed.
+
+**`hyprpm reload`** — Ensures every enabled plugin is actually loaded and every disabled plugin is unloaded. Useful after a Hyprland restart or config reload.
+
+**`hyprpm remove <repo>`** — Removes a repository and all plugins it provides. Accepts a URL, name, or `author/name`.
+
+**`hyprpm purge-cache`** — Deletes the entire `hyprpm` cache, including built plugin binaries, headers, and all stored state.
+
+## Flags
+
+| Flag | Short | Description |
+|---|---|---|
+| `--notify` | `-n` | Send a Hyprland notification when plugins load successfully. Warnings and errors always show notifications regardless of this flag. |
+| `--verbose` | `-v` | Enable detailed logging. |
+| `--force` | `-f` | Ignore safety checks. For example, `hyprpm update -f` forces a rebuild of all plugins even if sources haven't changed. |
+| `--no-shallow` | `-s` | Disable shallow cloning when fetching Hyprland sources. |
+| `--no-nix` | | Disable `nix develop` for build commands, even when Hyprland is installed via Nix. |
+| `--hl-url <url>` | | Use a custom Hyprland source URL when fetching headers. |
+
+## Loading plugins via config
+
+As an alternative to `hyprpm`, you can load a pre-built plugin directly from your Hyprland config file. This is useful for plugins you build yourself or distribute as binaries:
+
+```ini
+# ~/.config/hypr/hyprland.conf
+plugin = /path/to/plugin.so
+plugin = /home/user/.config/hypr/plugins/myplugin.so
+```
+
+Hyprland loads each listed `.so` in order during startup. Plugins loaded this way are not managed by `hyprpm` — you are responsible for keeping them up to date.
+
+<Warning>
+  Plugins loaded via `plugin =` in the config and plugins managed by `hyprpm` are independent. Avoid loading the same `.so` with both methods at the same time.
+</Warning>
+
+## Runtime interaction with hyprctl
+
+You can interact with loaded plugins at runtime using `hyprctl`:
+
+```bash
+# List all currently loaded plugins
+hyprctl plugin list
+
+# Load a plugin at runtime (does not persist across restarts)
+hyprctl plugin load /path/to/plugin.so
+
+# Unload a plugin at runtime
+hyprctl plugin unload /path/to/plugin.so
+```
+
+<Note>
+  `hyprctl plugin load` and `unload` affect the running session only. Use `hyprpm` or the `plugin =` config option for persistent loading.
+</Note>
+
+## Version compatibility
+
+Every plugin is compiled against a specific Hyprland build. The compatibility hash encodes the Hyprland commit, along with the versions of key dependencies (Aquamarine, Hyprutils, Hyprgraphics, Hyprcursor, and Hyprlang).
+
+If the hash embedded in a plugin does not match the running Hyprland's hash, Hyprland will refuse to load it and log an error.
+
+`hyprpm` keeps headers in sync automatically. After updating Hyprland, run:
+
+```bash
+hyprpm update
+```
+
+This rebuilds all plugins against the new headers so the hashes match again.
+
+<Warning>
+  Never load a plugin compiled for a different Hyprland version. A hash mismatch can cause crashes or undefined behavior because C++ ABI compatibility is not guaranteed across builds.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="hyprpm add fails with 'Headers outdated'">
+    Your installed Hyprland headers do not match the running Hyprland version. Run `hyprpm update` to refresh the headers, then retry `hyprpm add`.
+  </Accordion>
+  <Accordion title="Plugin fails to load after hyprpm reload">
+    This usually means the plugin was compiled for a different Hyprland version. Run `hyprpm update -f` to force a full rebuild of all plugins, then `hyprpm reload`.
+
+    If Hyprland itself was updated since the last build, you must restart Hyprland before the new plugin binaries can load correctly.
+  </Accordion>
+  <Accordion title="Plugin crashes Hyprland on load">
+    The most common causes are an ABI mismatch (compile the plugin with the same compiler and flags as Hyprland) and a missing or incorrect `pluginAPIVersion()` return value. Check the Hyprland log (`$XDG_RUNTIME_DIR/hypr/<instance>/hyprland.log`) for details.
+  </Accordion>
+  <Accordion title="hyprpm update says 'Hyprland was updated — please restart'">
+    `hyprpm` rebuilt the plugins successfully, but the running Hyprland process is still the old version. The new plugin binaries will only load correctly after you restart Hyprland.
+  </Accordion>
+  <Accordion title="hyprctl plugin load works but the plugin disappears after restart">
+    `hyprctl plugin load` is runtime-only. Add a `plugin = /path/to/plugin.so` line to your `hyprland.conf`, or manage the plugin with `hyprpm enable`, for it to persist across restarts.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,115 @@
+---
+title: "Layouts overview"
+description: "How Hyprland manages window placement with tiling and floating layouts, built-in algorithms, window states, and groups."
+keywords: ["layout", "tiling", "floating", "dwindle", "master", "layoutmsg", "groups", "hyprland"]
+---
+
+Hyprland uses a **layout** to decide how windows are placed on each workspace. Every window is in one of two modes at any time: **tiled** (positioned automatically by the active layout algorithm) or **floating** (positioned freely by the user or window rules).
+
+## Built-in layouts
+
+Hyprland ships two tiling algorithms out of the box.
+
+<Columns cols={2}>
+  <Card title="Dwindle" icon="table-cells-large" href="/layouts/dwindle">
+    Binary space partitioning. Each new window splits the space of the currently focused tile, creating a recursive grid. Suitable for most workflows.
+  </Card>
+  <Card title="Master" icon="table-columns" href="/layouts/master">
+    One master area and a stack. One window (the master) receives a configurable fraction of the screen; remaining windows share the other side.
+  </Card>
+</Columns>
+
+## Setting the layout
+
+Set the default layout in `hyprland.conf` inside the `general` block:
+
+```ini hyprland.conf
+general {
+    layout = dwindle   # or: master
+}
+```
+
+Switch at runtime without restarting:
+
+```bash
+hyprctl keyword general:layout master
+```
+
+## Window states
+
+Every tiled window can independently be in one of the following states.
+
+<AccordionGroup>
+  <Accordion title="Tiled">
+    The default. The layout algorithm owns the window's position and size.
+  </Accordion>
+  <Accordion title="Floating">
+    The window moves and resizes freely, ignoring the layout. Toggle with the `togglefloating` dispatcher:
+
+    ```ini hyprland.conf
+    bind = $mainMod, V, togglefloating
+    ```
+  </Accordion>
+  <Accordion title="Fullscreen">
+    The window expands to cover the entire monitor. Use `fullscreen` or `fakefullscreen` dispatchers.
+
+    ```ini hyprland.conf
+    bind = $mainMod, F, fullscreen
+    ```
+  </Accordion>
+  <Accordion title="Pseudo-tiled">
+    A Dwindle-specific mode. The window keeps its preferred size but stays in its tiled slot — useful for applications that request small fixed dimensions. Enable the keybind with `togglepseudo` or via `layoutmsg togglepseudo`. See [Dwindle pseudotiling](/layouts/dwindle#pseudotiling).
+  </Accordion>
+</AccordionGroup>
+
+## Window groups (tabbing)
+
+Window groups let you stack multiple windows into the same tile and cycle between them — similar to a tabbed layout.
+
+| Dispatcher | Effect |
+|---|---|
+| `togglegroup` | Create or dissolve a group at the focused window |
+| `changegroupactive f` | Focus the next window in the group |
+| `changegroupactive b` | Focus the previous window in the group |
+| `changegroupactive N` | Focus window at index `N` (1-based) in the group |
+
+Example binds:
+
+```ini hyprland.conf
+bind = $mainMod, G,       togglegroup
+bind = $mainMod, Tab,     changegroupactive, f
+bind = $mainMod SHIFT, Tab, changegroupactive, b
+```
+
+## The `layoutmsg` dispatcher
+
+`layoutmsg` passes a command to the currently active layout algorithm. This lets you trigger layout-specific actions from a single universal dispatcher.
+
+```ini hyprland.conf
+# Dwindle
+bind = $mainMod, J, layoutmsg, togglesplit
+
+# Master
+bind = $mainMod SHIFT, Return, layoutmsg, swapwithmaster
+```
+
+The commands available depend on the active layout. See [Dwindle dispatchers](/layouts/dwindle#dispatchers) and [Master dispatchers](/layouts/master#dispatchers) for the full lists.
+
+## Plugin layouts
+
+The `hyprpm` plugin manager can install third-party layouts that replace or extend the built-in ones. After installing a layout plugin, set the layout name to the plugin's identifier in the same way as a built-in:
+
+```bash
+hyprpm add https://github.com/example/hypr-layout-plugin
+hyprpm enable hypr-layout-plugin
+```
+
+```ini hyprland.conf
+general {
+    layout = scrolling   # example plugin layout name
+}
+```
+
+<Tip>
+  Run `hyprpm list` to see all installed plugins and their status.
+</Tip>

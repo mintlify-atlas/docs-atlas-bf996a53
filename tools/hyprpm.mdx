@@ -1,0 +1,234 @@
+---
+title: "hyprpm"
+description: "The official Hyprland plugin manager — install, enable, update, and remove plugins from git repositories."
+---
+
+`hyprpm` is the built-in plugin manager that ships with Hyprland. It clones plugin repositories from git, compiles them against your current Hyprland build, and manages their enabled/disabled state across sessions.
+
+<Note>
+Plugins must be compiled against the exact same Hyprland commit hash that is currently running. `hyprpm` handles this automatically during installation and flags version mismatches during updates.
+</Note>
+
+## Flags
+
+Flags are placed before the subcommand and apply globally.
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--notify` | `-n` | Send a Hyprland notification for important events (e.g. load failures) |
+| `--help` | `-h` | Show the help menu |
+| `--verbose` | `-v` | Enable verbose logging output |
+| `--force` | `-f` | Force the operation, ignoring safety checks |
+| `--no-shallow` | `-s` | Disable shallow cloning when fetching Hyprland sources |
+
+---
+
+## Subcommands
+
+### add
+
+Installs a new plugin from a git repository URL.
+
+```bash
+hyprpm add <git-url>
+```
+
+```bash
+hyprpm add https://github.com/hyprwm/hyprland-plugins
+```
+
+`hyprpm add` clones the repository, checks version compatibility with your running Hyprland instance, and compiles the plugin. If the build succeeds, the plugin is registered but **not yet enabled** — run `hyprpm enable` to load it.
+
+<Warning>
+If the plugin's source is not compatible with your Hyprland version, `hyprpm` will refuse to build it. Use `--force` to override this check, but the plugin may crash or misbehave.
+</Warning>
+
+---
+
+### enable
+
+Loads a plugin into the running Hyprland session.
+
+```bash
+hyprpm enable <plugin-name>
+```
+
+```bash
+hyprpm enable hyprexpo
+```
+
+The plugin name matches what is shown in `hyprpm list`. Enabled plugins persist across reloads — Hyprland automatically re-loads enabled plugins on startup.
+
+---
+
+### disable
+
+Unloads a plugin from the running Hyprland session.
+
+```bash
+hyprpm disable <plugin-name>
+```
+
+```bash
+hyprpm disable hyprexpo
+```
+
+The plugin remains installed and can be re-enabled at any time with `hyprpm enable`.
+
+---
+
+### reload
+
+Re-loads all plugins to match their current enabled/disabled state. Use this after a manual rebuild or to recover from a crash.
+
+```bash
+hyprpm reload
+```
+
+Force reload even if version checks fail:
+
+```bash
+hyprpm reload -f
+```
+
+---
+
+### update
+
+Checks all installed plugin repositories for updates, pulls changes, recompiles, and reloads as needed.
+
+```bash
+hyprpm update
+```
+
+Force update without version checks:
+
+```bash
+hyprpm update -f
+```
+
+<Note>
+After a Hyprland upgrade, run `hyprpm update` to recompile all plugins against the new Hyprland hash. Until you do, previously enabled plugins will not load.
+</Note>
+
+---
+
+### list
+
+Lists all installed plugin repositories and the plugins they provide, along with their enabled/disabled state.
+
+```bash
+hyprpm list
+```
+
+Example output:
+
+```
+Repository: https://github.com/hyprwm/hyprland-plugins
+  Plugin hyprexpo    enabled
+  Plugin hyprbars    disabled
+```
+
+---
+
+### remove
+
+Removes an installed plugin repository and all plugins it provides.
+
+```bash
+hyprpm remove <repository-url>
+```
+
+```bash
+hyprpm remove https://github.com/hyprwm/hyprland-plugins
+```
+
+---
+
+## Full install workflow
+
+<Steps>
+
+<Step title="Find a plugin repository">
+Browse community plugins on GitHub. Plugin repos typically have a `hyprpm.toml` manifest at their root.
+</Step>
+
+<Step title="Install the plugin">
+```bash
+hyprpm add https://github.com/hyprwm/hyprland-plugins
+```
+
+`hyprpm` clones the repository and compiles it. If you want verbose output during the build:
+
+```bash
+hyprpm -v add https://github.com/hyprwm/hyprland-plugins
+```
+</Step>
+
+<Step title="Verify the installation">
+```bash
+hyprpm list
+```
+
+Confirm the plugin appears and check its name.
+</Step>
+
+<Step title="Enable the plugin">
+```bash
+hyprpm enable hyprexpo
+```
+
+The plugin is now active. Add any required configuration to your `hyprland.conf`.
+</Step>
+
+<Step title="Keep plugins up to date">
+After updating Hyprland itself, recompile all plugins:
+
+```bash
+hyprpm update
+```
+
+To also receive desktop notifications about events during the update:
+
+```bash
+hyprpm -n update
+```
+</Step>
+
+</Steps>
+
+---
+
+## Version compatibility
+
+Hyprland plugins are native shared libraries compiled directly against Hyprland's internal headers. Because the internal API can change between commits, a plugin compiled for one Hyprland commit will not work with a different one.
+
+`hyprpm` tracks the Hyprland commit hash at install time and checks it at load time. If the hashes do not match (e.g. after a Hyprland upgrade), the plugin is blocked from loading until you rebuild it:
+
+```bash
+hyprpm update
+```
+
+If you need to bypass the check during testing:
+
+```bash
+hyprpm reload -f
+```
+
+<Warning>
+Forcing a load with a mismatched hash may cause Hyprland to crash. Only use `--force` in a controlled environment.
+</Warning>
+
+---
+
+## Disabling and removing plugins
+
+```bash
+# Unload without removing
+hyprpm disable hyprexpo
+
+# Fully uninstall
+hyprpm remove https://github.com/hyprwm/hyprland-plugins
+```
+
+Disabled plugins remain on disk. Removed plugins are deleted and must be re-installed with `hyprpm add` if you want them back.

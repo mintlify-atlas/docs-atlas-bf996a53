@@ -1,0 +1,102 @@
+{
+  "projectType": "general",
+  "projectName": "Hyprland",
+  "projectDescription": "A highly customizable, dynamic tiling Wayland compositor with powerful animations, plugin support, and socket-based IPC.",
+  "theme": "aspen",
+  "primaryColor": "#040404",
+  "lightColor": "#ffffff",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "getting-started/installation",
+              "getting-started/quick-start"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuring/variables",
+              "configuring/keybinds",
+              "configuring/monitors",
+              "configuring/window-rules",
+              "configuring/workspace-rules",
+              "configuring/animations"
+            ]
+          },
+          {
+            "group": "Layouts",
+            "pages": [
+              "layouts/overview",
+              "layouts/dwindle",
+              "layouts/master"
+            ]
+          },
+          {
+            "group": "Plugins",
+            "pages": [
+              "plugins/using-plugins",
+              "plugins/developing-plugins",
+              "plugins/plugin-api"
+            ]
+          },
+          {
+            "group": "Tools & IPC",
+            "pages": [
+              "tools/hyprctl",
+              "tools/hyprpm",
+              "tools/ipc-events"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Dynamic tiling with Dwindle and Master layouts",
+    "GPU-accelerated animations with custom bezier curves",
+    "Gradient borders, blur, shadows, and visual effects",
+    "Powerful plugin system with built-in plugin manager (hyprpm)",
+    "Socket-based IPC via hyprctl",
+    "Window/monitor/layer rules with regex matching",
+    "Special workspaces (scratchpads) and window groups",
+    "XWayland support for legacy X11 applications",
+    "Config hot-reload on save",
+    "Tearing support for gaming performance"
+  ],
+  "publicApiSurface": [
+    "HyprlandAPI::addConfigValue",
+    "HyprlandAPI::getConfigValue",
+    "HyprlandAPI::addConfigKeyword",
+    "HyprlandAPI::addDispatcherV2",
+    "HyprlandAPI::removeDispatcher",
+    "HyprlandAPI::createFunctionHook",
+    "HyprlandAPI::removeFunctionHook",
+    "HyprlandAPI::findFunctionsByName",
+    "HyprlandAPI::addWindowDecoration",
+    "HyprlandAPI::addTiledAlgo",
+    "HyprlandAPI::addFloatingAlgo",
+    "HyprlandAPI::registerHyprCtlCommand",
+    "HyprlandAPI::addNotificationV2",
+    "HyprlandAPI::invokeHyprctlCommand",
+    "HyprlandAPI::getHyprlandVersion",
+    "hyprctl dispatch",
+    "hyprctl keyword",
+    "hyprctl monitors",
+    "hyprctl clients",
+    "hyprctl workspaces",
+    "hyprctl activewindow",
+    "hyprctl setprop",
+    "hyprctl reload",
+    "hyprpm add",
+    "hyprpm enable",
+    "hyprpm disable",
+    "hyprpm update"
+  ]
+}

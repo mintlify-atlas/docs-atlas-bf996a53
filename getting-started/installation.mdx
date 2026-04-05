@@ -1,0 +1,199 @@
+---
+title: "Installation"
+description: "Install Hyprland on your system and get it running for the first time."
+keywords: ["install", "hyprland", "wayland", "arch", "nixos", "gentoo", "ubuntu", "source"]
+---
+
+## Prerequisites
+
+Before installing Hyprland, make sure your system meets the following requirements:
+
+- A Linux system with a kernel that supports Wayland (5.16+ recommended)
+- A GPU with Wayland-capable drivers:
+  - **NVIDIA**: proprietary driver 520+ with `nvidia-drm.modeset=1` kernel parameter
+  - **AMD**: Mesa with AMDGPU (open source, works out of the box)
+  - **Intel**: Mesa with i915 (open source, works out of the box)
+- Either a TTY to launch from, or a display manager such as SDDM, GDM, or ly
+
+<Warning>
+Hyprland does **not** run inside an existing X11 or Wayland session. You must launch it from a TTY or a display manager.
+</Warning>
+
+<Note>
+NVIDIA users should add `nvidia-drm.modeset=1` to their kernel parameters and ensure the `nvidia`, `nvidia_modeset`, `nvidia_uvm`, and `nvidia_drm` modules are loaded before starting Hyprland.
+</Note>
+
+## Install Hyprland
+
+<CodeGroup>
+
+```bash Arch Linux (pacman)
+# Hyprland is available in the official Arch repositories
+sudo pacman -S hyprland
+```
+
+```bash Arch Linux (AUR — git)
+# Install the latest git build via an AUR helper
+yay -S hyprland-git
+# or
+paru -S hyprland-git
+```
+
+```nix NixOS (flake)
+# In your flake.nix inputs:
+# hyprland.url = "github:hyprwm/Hyprland";
+
+# In your NixOS configuration:
+{ inputs, pkgs, ... }: {
+  programs.hyprland = {
+    enable = true;
+    package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
+    portalPackage = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.xdg-desktop-portal-hyprland;
+  };
+}
+```
+
+```nix NixOS (nixpkgs)
+# Using the version bundled with nixpkgs (may lag behind upstream)
+{ pkgs, ... }: {
+  programs.hyprland.enable = true;
+}
+```
+
+```nix Home Manager
+# In your home.nix or equivalent:
+{ inputs, pkgs, ... }: {
+  wayland.windowManager.hyprland = {
+    enable = true;
+    package = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
+  };
+}
+```
+
+```bash Gentoo
+# Add the GURU overlay for the latest ebuilds
+eselect repository enable guru
+emaint sync -r guru
+
+# Install Hyprland
+emerge --ask gui-wm/hyprland
+```
+
+```bash Ubuntu / Debian
+# Hyprland is not in the official Ubuntu or Debian repositories.
+# You must build from source. See "Building from source" below.
+# Alternatively, use a third-party PPA if one is available for your release.
+```
+
+</CodeGroup>
+
+## Building from source
+
+If your distribution does not package Hyprland, or you want the latest unreleased changes, build it yourself.
+
+<Steps>
+  <Step title="Install build dependencies">
+    Install the required libraries and tools. The exact package names vary by distribution.
+
+    ```bash
+    # Required dependencies (names shown for Arch Linux)
+    sudo pacman -S \
+      cmake ninja gcc git \
+      wayland wayland-protocols \
+      libxkbcommon pixman \
+      libinput cairo pango \
+      gdb meson \
+      xorg-xwayland \
+      libdrm mesa vulkan-headers
+    ```
+
+    On Ubuntu/Debian, the equivalent packages are spread across `-dev` suffixed packages. Refer to the [Hyprland wiki](https://wiki.hypr.land/Getting-Started/Installation/) for a full Debian/Ubuntu dependency list.
+  </Step>
+
+  <Step title="Clone the repository">
+    ```bash
+    git clone --recursive https://github.com/hyprwm/Hyprland.git
+    cd Hyprland
+    ```
+  </Step>
+
+  <Step title="Build and install">
+    ```bash
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+    sudo cmake --install build
+    ```
+  </Step>
+</Steps>
+
+## Post-install: create your config
+
+Hyprland generates a default config on first launch, but it is a good idea to place your own config file before starting.
+
+<Steps>
+  <Step title="Create the config directory">
+    ```bash
+    mkdir -p ~/.config/hypr
+    ```
+  </Step>
+
+  <Step title="Copy the example config">
+    If you installed via a package manager, the example config is typically installed to `/usr/share/hyprland/hyprland.conf`. Copy it to your config directory:
+
+    ```bash
+    cp /usr/share/hyprland/hyprland.conf ~/.config/hypr/hyprland.conf
+    ```
+
+    If you built from source, copy it from the cloned repository:
+
+    ```bash
+    cp /path/to/Hyprland/example/hyprland.conf ~/.config/hypr/hyprland.conf
+    ```
+  </Step>
+
+  <Step title="Edit the config to your liking">
+    Open the config with your preferred editor and adjust the `$terminal`, `$fileManager`, and `$menu` variables to match the programs you have installed. See [Quick start](/getting-started/quick-start) for guidance.
+
+    ```bash
+    nano ~/.config/hypr/hyprland.conf
+    ```
+  </Step>
+</Steps>
+
+## Launch Hyprland
+
+<Tabs>
+  <Tab title="From a TTY">
+    Log in to a TTY (press `Ctrl+Alt+F2` to switch to one) and run:
+
+    ```bash
+    Hyprland
+    ```
+
+    <Note>
+    Do not use `sudo`. Hyprland should be started as your regular user.
+    </Note>
+  </Tab>
+
+  <Tab title="From a display manager">
+    Install and enable a display manager such as SDDM:
+
+    ```bash
+    # Arch Linux example
+    sudo pacman -S sddm
+    sudo systemctl enable --now sddm
+    ```
+
+    Hyprland will appear as a session option on the login screen. Select **Hyprland** and log in.
+
+    <Tip>
+    SDDM is the recommended display manager for Hyprland. GDM and ly also work, but may require additional configuration.
+    </Tip>
+  </Tab>
+</Tabs>
+
+<Warning>
+If Hyprland crashes on startup, check the log at `$XDG_RUNTIME_DIR/hypr/<instance_id>/hyprland.log` for error messages. NVIDIA users should verify that kernel modesetting is enabled.
+</Warning>

@@ -1,0 +1,362 @@
+---
+title: "Master layout"
+description: "Master-stack layout for Hyprland. Reference for all master config options, dispatchers, and orientation modes."
+keywords: ["master", "layout", "tiling", "master-stack", "mfact", "orientation", "hyprland"]
+---
+
+The Master layout divides the workspace into two regions: the **master area** and the **stack**. The master window receives a configurable fraction of the screen (`mfact`). All remaining windows share the other side in a vertical (or horizontal) stack. Multiple master windows are supported.
+
+The master area can appear on any edge of the monitor, or centered between two stack columns.
+
+## Configuration
+
+Add a `master {}` block to `hyprland.conf`. All keys are optional; defaults are shown.
+
+```ini hyprland.conf
+master {
+    allow_small_split    = false
+    special_scale_factor = 1.0
+    mfact                = 0.55
+    new_status           = slave
+    new_on_top           = false
+    new_on_active        = none
+    orientation          = left
+    smart_resizing       = true
+    drop_at_cursor       = true
+    always_keep_position = false
+    slave_count_for_center_master = 2
+    center_master_fallback = left
+    center_ignores_reserved = false
+}
+```
+
+<AccordionGroup>
+  <Accordion title="allow_small_split">
+    **Type:** bool | **Default:** `false`
+
+    Allow creating a second master window even when there is only one slave window. When `false`, `addmaster` is a no-op if it would leave the slave side empty.
+  </Accordion>
+
+  <Accordion title="special_scale_factor">
+    **Type:** float | **Default:** `1.0`
+
+    Scale factor applied to all windows on a special workspace (scratchpad). Values below `1.0` add visible margins around the tiled area.
+  </Accordion>
+
+  <Accordion title="mfact">
+    **Type:** float | **Default:** `0.55` | **Range:** `0.05` – `0.95`
+
+    Fraction of the workspace width (or height, for top/bottom orientations) allocated to the master area. `0.55` gives the master window 55% of the space.
+
+    Adjust at runtime with `layoutmsg mfact`:
+
+    ```bash
+    hyprctl dispatch layoutmsg mfact +0.05
+    hyprctl dispatch layoutmsg mfact exact 0.5
+    ```
+  </Accordion>
+
+  <Accordion title="new_status">
+    **Type:** string | **Default:** `slave`
+
+    Where a newly opened window is placed.
+
+    | Value | Behavior |
+    |---|---|
+    | `slave` | New window opens as a slave in the stack |
+    | `master` | New window takes the master position, demoting the old master to slave |
+    | `inherit` | New window inherits the master/slave status of the currently focused window |
+  </Accordion>
+
+  <Accordion title="new_on_top">
+    **Type:** bool | **Default:** `false`
+
+    When `true`, new slave windows are prepended to the top of the stack instead of appended to the bottom.
+  </Accordion>
+
+  <Accordion title="new_on_active">
+    **Type:** string | **Default:** `none`
+
+    Insert new windows relative to the focused window rather than at the top or bottom of the stack.
+
+    | Value | Behavior |
+    |---|---|
+    | `none` | Use `new_on_top` to determine position |
+    | `before` | Insert before the focused window |
+    | `after` | Insert after the focused window |
+  </Accordion>
+
+  <Accordion title="orientation">
+    **Type:** string | **Default:** `left`
+
+    Which side of the screen the master area occupies.
+
+    | Value | Master position |
+    |---|---|
+    | `left` | Left side (slaves on right) |
+    | `right` | Right side (slaves on left) |
+    | `top` | Top (slaves below) |
+    | `bottom` | Bottom (slaves above) |
+    | `center` | Center column, slaves on both sides |
+
+    Override per-workspace using workspace rules:
+
+    ```ini hyprland.conf
+    workspace = 2, layoutopt:orientation:top
+    ```
+  </Accordion>
+
+  <Accordion title="smart_resizing">
+    **Type:** bool | **Default:** `true`
+
+    When resizing windows in the stack, distribute the size change proportionally among all siblings in the same column rather than only modifying the immediately adjacent window.
+  </Accordion>
+
+  <Accordion title="drop_at_cursor">
+    **Type:** bool | **Default:** `true`
+
+    When dragging a window to reposition it, drop it at the cursor's location in the stack order instead of always appending it at the bottom.
+  </Accordion>
+
+  <Accordion title="always_keep_position">
+    **Type:** bool | **Default:** `false`
+
+    When only one tiled window exists on the workspace, keep it at the master position and size (respecting `mfact` and `orientation`) rather than expanding it to fill the whole workspace.
+  </Accordion>
+
+  <Accordion title="slave_count_for_center_master">
+    **Type:** int | **Default:** `2`
+
+    Minimum number of slave windows required before the `center` orientation activates the true three-column layout. Below this threshold, `center_master_fallback` is used instead.
+  </Accordion>
+
+  <Accordion title="center_master_fallback">
+    **Type:** string | **Default:** `left`
+
+    Orientation to use when `orientation = center` but there are fewer slaves than `slave_count_for_center_master`. Accepts `left`, `right`, `top`, or `bottom`.
+  </Accordion>
+
+  <Accordion title="center_ignores_reserved">
+    **Type:** bool | **Default:** `false`
+
+    When `true` and `orientation = center`, the master column ignores the monitor's reserved area (bars, docks) and can extend into it.
+  </Accordion>
+</AccordionGroup>
+
+## Dispatchers
+
+Send these commands through the `layoutmsg` dispatcher. They only take effect when Master is the active layout.
+
+<AccordionGroup>
+  <Accordion title="swapwithmaster [arg]">
+    Swap the focused window with the master window.
+
+    | Argument | Focus after swap |
+    |---|---|
+    | *(none)* / `auto` | Follow the previously focused window |
+    | `master` | Focus the new master |
+    | `child` | Focus the new slave (old master) |
+    | `ignoremaster` | Do nothing if the focused window is already the master |
+
+    ```ini hyprland.conf
+    bind = $mainMod SHIFT, Return, layoutmsg, swapwithmaster
+    bind = $mainMod SHIFT, Return, layoutmsg, swapwithmaster master
+    ```
+  </Accordion>
+
+  <Accordion title="focusmaster [arg]">
+    Move focus to the master window.
+
+    | Argument | Behavior |
+    |---|---|
+    | *(none)* / `auto` | Focus master; if already focused, focus the first slave |
+    | `master` | Always focus the master, even if it was already focused |
+    | `previous` | Return to the slave focused before the last `focusmaster previous` call |
+
+    ```ini hyprland.conf
+    bind = $mainMod, Return, layoutmsg, focusmaster auto
+    ```
+  </Accordion>
+
+  <Accordion title="cyclenext [noloop]">
+    Move focus to the next window in the master list. Cycles back to the first if `noloop` is not specified.
+
+    ```ini
+    bind = $mainMod, Tab, layoutmsg, cyclenext
+    bind = $mainMod, Tab, layoutmsg, cyclenext noloop
+    ```
+  </Accordion>
+
+  <Accordion title="cycleprev [noloop]">
+    Move focus to the previous window. Cycles to the last if `noloop` is not specified.
+
+    ```ini
+    bind = $mainMod SHIFT, Tab, layoutmsg, cycleprev
+    ```
+  </Accordion>
+
+  <Accordion title="swapnext [noloop]">
+    Swap the focused window with the next window in the stack order.
+  </Accordion>
+
+  <Accordion title="swapprev [noloop]">
+    Swap the focused window with the previous window in the stack order.
+  </Accordion>
+
+  <Accordion title="addmaster">
+    Promote the focused slave window to master. If the focused window is already the master, the first slave is promoted instead.
+  </Accordion>
+
+  <Accordion title="removemaster">
+    Demote the focused master window to the slave stack. Requires at least two master windows.
+  </Accordion>
+
+  <Accordion title="orientationleft / orientationright / orientationtop / orientationbottom / orientationcenter">
+    Change the master orientation for the current workspace without modifying `hyprland.conf`.
+
+    ```ini hyprland.conf
+    bind = $mainMod SHIFT, left,  layoutmsg, orientationleft
+    bind = $mainMod SHIFT, right, layoutmsg, orientationright
+    bind = $mainMod SHIFT, up,    layoutmsg, orientationtop
+    bind = $mainMod SHIFT, down,  layoutmsg, orientationbottom
+    bind = $mainMod SHIFT, C,     layoutmsg, orientationcenter
+    ```
+  </Accordion>
+
+  <Accordion title="orientationnext / orientationprev">
+    Cycle through all five orientations in order (left → top → right → bottom → center) or in reverse.
+
+    ```ini
+    bind = $mainMod, O, layoutmsg, orientationnext
+    bind = $mainMod SHIFT, O, layoutmsg, orientationprev
+    ```
+  </Accordion>
+
+  <Accordion title="orientationcycle [list]">
+    Cycle through a custom subset of orientations. List the orientations as space-separated arguments.
+
+    ```ini
+    # Cycle only between left and right
+    bind = $mainMod, O, layoutmsg, orientationcycle left right
+    ```
+  </Accordion>
+
+  <Accordion title="rollnext">
+    Promote the first slave to master and move the old master to the bottom of the slave stack. Focus follows the new master.
+  </Accordion>
+
+  <Accordion title="rollprev">
+    Promote the last slave to master and move the old master to the top of the slave stack. Focus follows the new master.
+  </Accordion>
+
+  <Accordion title="mfact [delta | exact value]">
+    Adjust the master area fraction. Pass a relative delta or prefix with `exact` for an absolute value.
+
+    ```ini hyprland.conf
+    bind = $mainMod, equal, layoutmsg, mfact +0.05
+    bind = $mainMod, minus, layoutmsg, mfact -0.05
+    bind = $mainMod SHIFT, equal, layoutmsg, mfact exact 0.5
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Orientation modes
+
+<Tabs>
+  <Tab title="left (default)">
+    Master occupies the left fraction of the workspace. Slaves stack vertically on the right.
+
+    ```
+    ┌────────┬────┐
+    │        │ S1 │
+    │ Master ├────┤
+    │        │ S2 │
+    └────────┴────┘
+    ```
+  </Tab>
+  <Tab title="right">
+    Master occupies the right fraction. Slaves stack vertically on the left.
+
+    ```
+    ┌────┬────────┐
+    │ S1 │        │
+    ├────┤ Master │
+    │ S2 │        │
+    └────┴────────┘
+    ```
+  </Tab>
+  <Tab title="top">
+    Master occupies the top fraction. Slaves arrange horizontally below.
+
+    ```
+    ┌──────────────┐
+    │    Master    │
+    ├────┬────┬────┤
+    │ S1 │ S2 │ S3 │
+    └────┴────┴────┘
+    ```
+  </Tab>
+  <Tab title="bottom">
+    Master occupies the bottom fraction. Slaves arrange horizontally above.
+
+    ```
+    ┌────┬────┬────┐
+    │ S1 │ S2 │ S3 │
+    ├────┴────┴────┤
+    │    Master    │
+    └──────────────┘
+    ```
+  </Tab>
+  <Tab title="center">
+    Master occupies a center column. Slaves are distributed on both sides. Requires at least `slave_count_for_center_master` slaves (default 2) to activate; falls back to `center_master_fallback` orientation otherwise.
+
+    ```
+    ┌────┬────────┬────┐
+    │ S1 │        │ S2 │
+    ├────┤ Master ├────┤
+    │ S3 │        │ S4 │
+    └────┴────────┴────┘
+    ```
+  </Tab>
+</Tabs>
+
+## Example config
+
+```ini hyprland.conf
+general {
+    layout = master
+}
+
+master {
+    mfact      = 0.55     # master gets 55% of the screen
+    new_status = slave    # new windows open as slaves
+    new_on_top = false    # append new slaves at the bottom
+    orientation = left    # master on the left side
+    smart_resizing = true
+    drop_at_cursor = true
+}
+
+# Focus and swap
+bind = $mainMod, Return,       layoutmsg, swapwithmaster
+bind = $mainMod SHIFT, Return, layoutmsg, focusmaster auto
+
+# Cycle focus through windows
+bind = $mainMod, Tab,          layoutmsg, cyclenext
+bind = $mainMod SHIFT, Tab,    layoutmsg, cycleprev
+
+# Promote / demote master
+bind = $mainMod, M,            layoutmsg, addmaster
+bind = $mainMod SHIFT, M,      layoutmsg, removemaster
+
+# Roll windows through master
+bind = $mainMod, bracketright, layoutmsg, rollnext
+bind = $mainMod, bracketleft,  layoutmsg, rollprev
+
+# Adjust master width
+bind = $mainMod, equal,        layoutmsg, mfact +0.05
+bind = $mainMod, minus,        layoutmsg, mfact -0.05
+
+# Change orientation
+bind = $mainMod, O,            layoutmsg, orientationnext
+bind = $mainMod SHIFT, O,      layoutmsg, orientationprev
+```

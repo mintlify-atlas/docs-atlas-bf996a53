@@ -1,0 +1,588 @@
+---
+title: "IPC events"
+description: "Listen to real-time events from Hyprland over socket2 to build scripts, bars, and integrations."
+---
+
+Hyprland exposes two Unix domain sockets for IPC:
+
+| Socket | Purpose |
+|--------|---------|
+| `socket.sock` | Command socket — used by `hyprctl` to send queries and dispatchers |
+| `socket2.sock` | Event socket — streams real-time events as they happen |
+
+Both sockets live at:
+
+```
+$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/
+```
+
+For example:
+
+```
+/run/user/1000/hypr/1234abcd5678efgh/.socket.sock
+/run/user/1000/hypr/1234abcd5678efgh/.socket2.sock
+```
+
+<Tip>
+Your `$HYPRLAND_INSTANCE_SIGNATURE` is set automatically when Hyprland starts. Use `hyprctl instances` to list all running instances and their signatures.
+</Tip>
+
+---
+
+## Event format
+
+Events emitted on `socket2` use the following line-based format:
+
+```
+EVENT>>DATA\n
+```
+
+- `EVENT` — the event name (lowercase, alphanumeric)
+- `>>` — separator
+- `DATA` — event-specific payload (may be empty, a single value, or comma-separated fields)
+- `\n` — newline terminating the event
+
+Each event is a single line. Newlines in data fields are replaced with spaces.
+
+---
+
+## Listening to events
+
+<CodeGroup>
+
+```bash socat
+socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock
+```
+
+```bash nc
+nc -U $XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock
+```
+
+```bash shell script
+#!/bin/bash
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+socat -U - UNIX-CONNECT:"$SOCKET" | while read -r line; do
+    event="${line%%>>*}"
+    data="${line#*>>}"
+    echo "Event: $event | Data: $data"
+done
+```
+
+```python python
+import socket
+import os
+
+sig = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+path = f"{runtime}/hypr/{sig}/.socket2.sock"
+
+with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+    sock.connect(path)
+    buf = ""
+    while True:
+        chunk = sock.recv(4096).decode()
+        buf += chunk
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
+            event, _, data = line.partition(">>")
+            print(f"Event: {event!r}  Data: {data!r}")
+```
+
+</CodeGroup>
+
+---
+
+## All events
+
+<AccordionGroup>
+
+<Accordion title="workspace — active workspace changed">
+Fired when the active workspace changes.
+
+| Field | Description |
+|-------|-------------|
+| `workspacename` | Name of the new active workspace |
+
+```
+workspace>>1
+workspace>>coding
+```
+
+**v2 variant:** `workspacev2>>id,name`
+</Accordion>
+
+<Accordion title="focusedmon — active monitor changed">
+Fired when the focused monitor changes.
+
+| Field | Description |
+|-------|-------------|
+| `monname` | Monitor name |
+| `workspacename` | Active workspace name on that monitor |
+
+```
+focusedmon>>DP-1,1
+```
+
+**v2 variant:** `focusedmonv2>>monname,workspaceid`
+</Accordion>
+
+<Accordion title="activewindow — active window changed">
+Fired when the focused window changes.
+
+| Field | Description |
+|-------|-------------|
+| `class` | Window class |
+| `title` | Window title |
+
+```
+activewindow>>kitty,~
+activewindow>>,
+```
+
+An empty payload (`>>`,) means no window is focused.
+
+**v2 variant:** `activewindowv2>>windowaddress` (hex address, or empty)
+</Accordion>
+
+<Accordion title="fullscreen — fullscreen state changed">
+Fired when a window enters or exits fullscreen.
+
+| Field | Description |
+|-------|-------------|
+| `state` | `1` if entering fullscreen, `0` if leaving |
+
+```
+fullscreen>>1
+fullscreen>>0
+```
+</Accordion>
+
+<Accordion title="monitorremoved — monitor disconnected">
+Fired when a monitor is disconnected or removed.
+
+| Field | Description |
+|-------|-------------|
+| `monname` | Name of the removed monitor |
+
+```
+monitorremoved>>DP-2
+```
+
+**v2 variant:** `monitorremovedv2>>id,name,description`
+</Accordion>
+
+<Accordion title="monitoradded — monitor connected">
+Fired when a new monitor is connected or added.
+
+| Field | Description |
+|-------|-------------|
+| `monname` | Name of the new monitor |
+
+```
+monitoradded>>DP-2
+```
+
+**v2 variant:** `monitoraddedv2>>id,name,description`
+</Accordion>
+
+<Accordion title="createworkspace — workspace created">
+Fired when a new workspace is created.
+
+| Field | Description |
+|-------|-------------|
+| `workspacename` | Name of the new workspace |
+
+```
+createworkspace>>5
+```
+
+**v2 variant:** `createworkspacev2>>id,name`
+</Accordion>
+
+<Accordion title="destroyworkspace — workspace destroyed">
+Fired when a workspace is removed.
+
+| Field | Description |
+|-------|-------------|
+| `workspacename` | Name of the destroyed workspace |
+
+```
+destroyworkspace>>5
+```
+
+**v2 variant:** `destroyworkspacev2>>id,name`
+</Accordion>
+
+<Accordion title="moveworkspace — workspace moved to monitor">
+Fired when a workspace is moved to a different monitor.
+
+| Field | Description |
+|-------|-------------|
+| `workspacename` | Workspace name |
+| `monname` | Destination monitor name |
+
+```
+moveworkspace>>coding,DP-2
+```
+
+**v2 variant:** `moveworkspacev2>>id,name,monname`
+</Accordion>
+
+<Accordion title="renameworkspace — workspace renamed">
+Fired when a workspace is renamed.
+
+| Field | Description |
+|-------|-------------|
+| `id` | Workspace id |
+| `newname` | New workspace name |
+
+```
+renameworkspace>>3,work
+```
+</Accordion>
+
+<Accordion title="activespecial — special workspace toggled">
+Fired when a special workspace is shown or hidden.
+
+| Field | Description |
+|-------|-------------|
+| `workspacename` | Special workspace name (empty when hidden) |
+| `monname` | Monitor name |
+
+```
+activespecial>>scratch,DP-1
+activespecial>>,DP-1
+```
+
+**v2 variant:** `activespecialv2>>id,name,monname`
+</Accordion>
+
+<Accordion title="activelayout — keyboard layout changed">
+Fired when the active keyboard layout changes.
+
+| Field | Description |
+|-------|-------------|
+| `keyboardname` | Keyboard device name |
+| `layoutname` | New layout name |
+
+```
+activelayout>>at-translated-set-2-keyboard,English (US)
+```
+</Accordion>
+
+<Accordion title="openwindow — window opened">
+Fired when a new window is mapped (opened).
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+| `workspacename` | Workspace where the window opened |
+| `class` | Window class |
+| `title` | Window title |
+
+```
+openwindow>>0x55f1a2b3,1,kitty,~
+```
+</Accordion>
+
+<Accordion title="closewindow — window closed">
+Fired when a window is unmapped (closed).
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the closed window |
+
+```
+closewindow>>0x55f1a2b3
+```
+</Accordion>
+
+<Accordion title="movewindow — window moved to workspace">
+Fired when a window is moved to a different workspace.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+| `workspacename` | Destination workspace name |
+
+```
+movewindow>>0x55f1a2b3,2
+```
+
+**v2 variant:** `movewindowv2>>address,workspaceid,workspacename`
+</Accordion>
+
+<Accordion title="openlayer — layer surface opened">
+Fired when a layer surface (bar, notification, etc.) is created.
+
+| Field | Description |
+|-------|-------------|
+| `namespace` | Layer surface namespace |
+
+```
+openlayer>>waybar
+```
+</Accordion>
+
+<Accordion title="closelayer — layer surface closed">
+Fired when a layer surface is destroyed.
+
+| Field | Description |
+|-------|-------------|
+| `namespace` | Layer surface namespace |
+
+```
+closelayer>>waybar
+```
+</Accordion>
+
+<Accordion title="submap — keybind submap changed">
+Fired when the active keybind submap changes.
+
+| Field | Description |
+|-------|-------------|
+| `submapname` | New submap name, or empty string when returning to the default map |
+
+```
+submap>>resize
+submap>>
+```
+</Accordion>
+
+<Accordion title="windowtitle — window title changed">
+Fired when a window's title changes.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+
+```
+windowtitle>>0x55f1a2b3
+```
+
+**v2 variant:** `windowtitlev2>>address,newtitle`
+</Accordion>
+
+<Accordion title="urgent — window marked urgent">
+Fired when a window sets the urgent hint.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the urgent window |
+
+```
+urgent>>0x55f1a2b3
+```
+</Accordion>
+
+<Accordion title="screencast — screencast session changed">
+Fired when a screencasting session starts or stops.
+
+| Field | Description |
+|-------|-------------|
+| `state` | `1` if started, `0` if stopped |
+| `owner` | `0` for monitor, `1` for window |
+
+```
+screencast>>1,0
+screencast>>0,0
+```
+
+**v2 variant:** `screencastv2>>state,owner,sourcename`
+</Accordion>
+
+<Accordion title="minimized — window minimized or restored">
+Fired when a window is minimized or unminimized.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+| `state` | `1` if minimized, `0` if restored |
+
+```
+minimized>>0x55f1a2b3,1
+minimized>>0x55f1a2b3,0
+```
+</Accordion>
+
+<Accordion title="pin — window pinned or unpinned">
+Fired when a window is pinned to or unpinned from all workspaces.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+| `pinstate` | `1` if pinned, `0` if unpinned |
+
+```
+pin>>0x55f1a2b3,1
+pin>>0x55f1a2b3,0
+```
+</Accordion>
+
+<Accordion title="lockgroups — group lock state changed">
+Fired when the global group lock state changes.
+
+| Field | Description |
+|-------|-------------|
+| `state` | `1` if locked, `0` if unlocked |
+
+```
+lockgroups>>1
+lockgroups>>0
+```
+</Accordion>
+
+<Accordion title="moveintogroup — window moved into a group">
+Fired when a window is moved into a group.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+
+```
+moveintogroup>>0x55f1a2b3
+```
+</Accordion>
+
+<Accordion title="moveoutofgroup — window moved out of a group">
+Fired when a window is moved out of a group.
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window |
+
+```
+moveoutofgroup>>0x55f1a2b3
+```
+</Accordion>
+
+<Accordion title="configreloaded — config reloaded">
+Fired when the Hyprland config is reloaded. No data payload.
+
+```
+configreloaded>>
+```
+</Accordion>
+
+<Accordion title="ignoregrouplock — group lock ignore state changed">
+Fired when the `binds:ignore_group_lock` setting is temporarily toggled via `setignoregrouplock`.
+
+```
+ignoregrouplock>>1
+ignoregrouplock>>0
+```
+</Accordion>
+
+<Accordion title="kill — kill mode window selected">
+Fired when a window is selected in kill mode (after `hyprctl kill`).
+
+| Field | Description |
+|-------|-------------|
+| `windowaddress` | Hex address of the window being killed |
+
+```
+kill>>0x55f1a2b3
+```
+</Accordion>
+
+<Accordion title="custom — custom event emitted">
+Fired when `hyprctl dispatch event <args>` is called. The payload is the raw string passed to the dispatcher.
+
+```
+custom>>my-event-name
+```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Emitting custom events
+
+You can emit your own events to `socket2` using the `event` dispatcher. Any connected listener receives them as `custom>>data`.
+
+```bash
+hyprctl dispatch event my-event-name
+```
+
+This is useful for coordinating between scripts: one process emits an event, another listens on socket2 and reacts.
+
+---
+
+## Example: workspace indicator
+
+A minimal shell script that prints the active workspace whenever it changes:
+
+```bash
+#!/bin/bash
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+
+socat -U - UNIX-CONNECT:"$SOCKET" | while read -r line; do
+    event="${line%%>>*}"
+    data="${line#*>>}"
+
+    case "$event" in
+        workspace)
+            echo "Active workspace: $data"
+            ;;
+        activewindow)
+            class="${data%%,*}"
+            title="${data#*,}"
+            echo "Focused: $class — $title"
+            ;;
+    esac
+done
+```
+
+---
+
+## Example: Python event dispatcher
+
+```python
+import socket
+import os
+
+def connect_to_socket2():
+    sig = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+    runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    path = f"{runtime}/hypr/{sig}/.socket2.sock"
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(path)
+    return sock
+
+def iter_events(sock):
+    buf = ""
+    while True:
+        chunk = sock.recv(4096).decode()
+        if not chunk:
+            break
+        buf += chunk
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
+            event, _, data = line.partition(">>")
+            yield event, data
+
+handlers = {}
+
+def on(event_name):
+    def decorator(fn):
+        handlers[event_name] = fn
+        return fn
+    return decorator
+
+@on("workspace")
+def handle_workspace(data):
+    print(f"Switched to workspace: {data}")
+
+@on("activewindow")
+def handle_active_window(data):
+    cls, _, title = data.partition(",")
+    print(f"Active window: [{cls}] {title}")
+
+with connect_to_socket2() as sock:
+    for event, data in iter_events(sock):
+        if event in handlers:
+            handlers[event](data)
+```

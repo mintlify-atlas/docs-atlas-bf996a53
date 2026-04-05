@@ -1,0 +1,81 @@
+---
+title: "Welcome to Hyprland"
+description: "A highly customizable, dynamic tiling Wayland compositor that doesn't sacrifice on its looks."
+---
+
+Hyprland is a 100% independent, dynamic tiling Wayland compositor built from the ground up. It provides the latest Wayland features, powerful plugin support, smooth GPU-accelerated animations, and easy IPC — all while looking stunning out of the box.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/getting-started/installation">
+    Install Hyprland on your distribution and get your system ready
+  </Card>
+  <Card title="Quick Start" icon="rocket" href="/getting-started/quick-start">
+    Configure Hyprland and get productive in minutes
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuring/variables">
+    Customize every aspect of your compositor experience
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/plugins/using-plugins">
+    Extend Hyprland with community and custom plugins
+  </Card>
+</CardGroup>
+
+## What makes Hyprland different
+
+<CardGroup cols={2}>
+  <Card title="Stunning visuals" icon="wand-magic-sparkles">
+    Gradient borders, Gaussian blur, drop shadows, and custom bezier-curve animations — all GPU-accelerated.
+  </Card>
+  <Card title="Fully dynamic workspaces" icon="table-cells">
+    Workspaces are created and destroyed on demand. No fixed workspace limit.
+  </Card>
+  <Card title="Powerful plugin system" icon="plug">
+    The built-in `hyprpm` plugin manager lets you install, enable, and update plugins from git repositories.
+  </Card>
+  <Card title="Hot-reload config" icon="rotate">
+    Save your config file and changes take effect instantly — no restart required.
+  </Card>
+  <Card title="Socket-based IPC" icon="network-wired">
+    Control everything programmatically via `hyprctl` or the Unix socket directly.
+  </Card>
+  <Card title="XWayland support" icon="display">
+    Run legacy X11 applications seamlessly alongside native Wayland clients.
+  </Card>
+</CardGroup>
+
+## Get started in 3 steps
+
+<Steps>
+  <Step title="Install Hyprland">
+    Follow the [installation guide](/getting-started/installation) for your distribution — packages are available for Arch, NixOS, Gentoo, and many others.
+  </Step>
+  <Step title="Set up your config">
+    Copy the [example config](https://github.com/hyprwm/Hyprland/blob/main/example/hyprland.conf) to `~/.config/hypr/hyprland.conf` and customize it for your setup.
+  </Step>
+  <Step title="Launch and explore">
+    Start Hyprland from a TTY or display manager, then use `hyprctl` to query state and `hyprpm` to install plugins.
+  </Step>
+</Steps>
+
+## Explore the docs
+
+<CardGroup cols={3}>
+  <Card title="Variables" icon="gear" href="/configuring/variables">
+    All configuration options with types and defaults
+  </Card>
+  <Card title="Keybinds" icon="keyboard" href="/configuring/keybinds">
+    Bind keys, mouse buttons, and dispatchers
+  </Card>
+  <Card title="Window Rules" icon="window-restore" href="/configuring/window-rules">
+    Apply properties to windows based on class or title
+  </Card>
+  <Card title="Animations" icon="film" href="/configuring/animations">
+    Bezier curves and animation configuration
+  </Card>
+  <Card title="hyprctl" icon="terminal" href="/tools/hyprctl">
+    Full IPC command reference
+  </Card>
+  <Card title="Plugin API" icon="code" href="/plugins/plugin-api">
+    C++ API for writing Hyprland plugins
+  </Card>
+</CardGroup>

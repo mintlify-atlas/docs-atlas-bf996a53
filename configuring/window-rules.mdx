@@ -1,0 +1,263 @@
+---
+title: 'Window rules'
+description: 'Apply rules to windows based on class, title, state, and other properties in Hyprland.'
+keywords: ['hyprland', 'window rules', 'windowrule', 'float', 'opacity', 'blur', 'layer rules']
+---
+
+## windowrule block syntax
+
+Window rules use a block syntax introduced in recent Hyprland versions. Each block has a `name`, one or more `match:` conditions, and one or more rule actions:
+
+```ini
+windowrule {
+    name = RULE_NAME
+    match:class = REGEX
+    match:title = REGEX
+
+    ACTION = VALUE
+}
+```
+
+The `name` field is required and must be unique. It is used for debugging and for `exec`-based rules.
+
+<Note>
+  The old `windowrule = RULE, FILTER` and `windowrulev2 = RULE, matchers...` syntaxes are deprecated. Use the block syntax shown here.
+</Note>
+
+## Match fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match:class` | regex | Window app class (e.g. `firefox`, `kitty`) |
+| `match:title` | regex | Window title |
+| `match:initialclass` | regex | App class at the time the window first opened |
+| `match:initialtitle` | regex | Title at the time the window first opened |
+| `match:tag` | regex | Tag applied to the window via `tagwindow` |
+| `match:xwayland` | bool | `true` if window is an XWayland window |
+| `match:float` | bool | `true` if window is floating |
+| `match:fullscreen` | bool | `true` if window is fullscreen |
+| `match:pin` | bool | `true` if window is pinned |
+| `match:workspace` | workspace selector | Matches by workspace (e.g. `1`, `name:dev`, `w[tv1]`) |
+| `match:focus` | bool | `true` if window is currently focused |
+| `match:group` | string | Group state: `set` (in a group), `notset` |
+| `match:modal` | bool | `true` if window is a modal dialog |
+
+All regex fields use RE2 syntax. Use `.*` to match any value.
+
+```ini
+windowrule {
+    name = suppress-maximize-events
+    match:class = .*
+
+    suppress_event = maximize
+}
+
+windowrule {
+    name = fix-xwayland-drags
+    match:class = ^$
+    match:title = ^$
+    match:xwayland = true
+    match:float = true
+    match:fullscreen = false
+    match:pin = false
+
+    no_focus = true
+}
+```
+
+## Static rule actions
+
+Static rules are applied once when a window opens. They cannot be changed while the window is alive.
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `float` | `yes`/`no` | Force the window to float or tile |
+| `tile` | — | Force the window to tile |
+| `fullscreen` | — | Open fullscreen |
+| `maximize` | — | Open maximized |
+| `fullscreenstate` | `CLIENT INTERNAL` | Set fullscreen state (−1 = current, 0 = none, 1 = maximize, 2 = fullscreen, 3 = both) |
+| `move` | `X Y` | Set initial position (pixels or `cursor`) |
+| `size` | `W H` | Set initial size in pixels or percentage |
+| `center` | `[1]` | Center the window (optional `1` = center respecting reserved) |
+| `pseudo` | — | Open as pseudo-tiled |
+| `monitor` | `NAME` | Open on a specific monitor |
+| `workspace` | `WORKSPACE [silent]` | Open on a specific workspace |
+| `pin` | — | Pin the window to all workspaces |
+| `noinitialfocus` | — | Do not focus the window when it opens |
+| `group` | `set`/`new`/`lock`/`barred` | Control group membership |
+| `suppress_event` | `EVENT` | Suppress a window event (`maximize`, `fullscreen`, `activate`, `activatefocus`) |
+| `content` | `TYPE` | Set content type hint |
+| `noclosefor` | `MS` | Prevent closing the window for N milliseconds |
+
+```ini
+windowrule {
+    name = move-hyprland-run
+    match:class = hyprland-run
+
+    move = 20 monitor_h-120
+    float = yes
+}
+```
+
+### Position and size values
+
+`move` and `size` accept:
+
+- Pixel values: `100 200`
+- Percentages: `50% 25%`
+- `cursor` for position: `cursor -10 -10`
+- Monitor-relative: `monitor_x`, `monitor_y`, `monitor_w`, `monitor_h`
+
+## Dynamic rule actions
+
+Dynamic rules are re-evaluated whenever the matching properties change.
+
+<AccordionGroup>
+
+<Accordion title="Appearance">
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `rounding` | `N` | Override corner rounding in pixels |
+| `rounding_power` | `N` | Override rounding curve power |
+| `border_size` | `N` | Override border size in pixels |
+| `opacity` | `ACTIVE [INACTIVE [FULLSCREEN]]` | Set window opacity (0.0–1.0) |
+| `decorate` | `yes`/`no` | Show or hide window decorations |
+| `no_blur` | — | Disable blur for this window |
+| `no_shadow` | — | Disable shadow for this window |
+| `no_dim` | — | Disable dimming for this window |
+| `opaque` | — | Force window to be fully opaque |
+| `xray` | `yes`/`no` | Blur sees through this window |
+| `dim_around` | `yes`/`no` | Dim everything except this window |
+| `animation` | `STYLE` | Override animation style for this window |
+| `activebordercolor` | `COLOR` | Override active border color |
+| `inactivebordercolor` | `COLOR` | Override inactive border color |
+| `nearest_neighbor` | — | Use nearest-neighbor scaling |
+
+```ini
+windowrule {
+    name = firefox-opacity
+    match:class = firefox
+
+    opacity = 0.9 0.7
+}
+```
+
+</Accordion>
+
+<Accordion title="Focus and input">
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `no_focus` | — | Window cannot receive focus |
+| `no_follow_mouse` | — | Cursor movement does not focus this window |
+| `allows_input` | — | Allow input even when `no_focus` is set |
+| `focus_on_activate` | — | Always focus when the window requests activation |
+| `stay_focused` | — | Keep focus on this window |
+| `no_shortcuts_inhibit` | — | Prevent the window from inhibiting keyboard shortcuts |
+| `idle_inhibit` | `MODE` | Inhibit idle: `none`, `always`, `fullscreen`, `focus` |
+
+</Accordion>
+
+<Accordion title="Size constraints">
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `minsize` | `W H` | Minimum window size |
+| `maxsize` | `W H` | Maximum window size |
+| `no_maxsize` | — | Remove maximum size constraint |
+| `keep_aspect_ratio` | — | Preserve aspect ratio when resizing |
+| `persistent_size` | — | Remember window size across workspace switches |
+
+</Accordion>
+
+<Accordion title="Other">
+
+| Action | Arguments | Description |
+|--------|-----------|-------------|
+| `no_anim` | — | Disable animations for this window |
+| `immediate` | — | Enable tearing/immediate presentation for this window |
+| `no_vrr` | — | Disable VRR for the monitor this window is on |
+| `render_unfocused` | — | Always render even when unfocused |
+| `no_screen_share` | — | Hide window from screen capture |
+| `force_rgbx` | — | Force RGBX (no alpha) rendering |
+| `scroll_mouse` | `N` | Override scroll factor for mouse |
+| `scroll_touchpad` | `N` | Override scroll factor for touchpad |
+| `tag` | `NAME [VALUE]` | Apply a tag to the window |
+| `sync_fullscreen` | `yes`/`no` | Sync fullscreen state to the client |
+
+</Accordion>
+
+</AccordionGroup>
+
+## Layer rules
+
+Layer rules apply to compositor layers (status bars, notification daemons, launchers) rather than windows. They use a flat syntax:
+
+```ini
+layerrule = RULE, NAMESPACE
+```
+
+`NAMESPACE` is a regex matched against the layer's namespace. Common namespaces: `waybar`, `notifications`, `rofi`, `wofi`.
+
+| Rule | Description |
+|------|-------------|
+| `blur` | Apply blur to this layer surface |
+| `blurpopups` | Apply blur to popups of this layer |
+| `ignorealpha N` | Ignore pixels with alpha below N for blur |
+| `noanim` | Disable animations for this layer |
+| `dimaround` | Dim everything behind this layer |
+| `xray yes/no` | Blur sees through this layer |
+| `animation STYLE` | Override the animation for this layer |
+| `order N` | Set the stacking order |
+| `abovelockscreen` | Render this layer above the lock screen |
+| `noscreenShare` | Exclude from screen capture |
+
+```ini
+layerrule = blur, waybar
+layerrule = ignorealpha 0.5, waybar
+layerrule = blur, rofi
+layerrule = dimaround, rofi
+layerrule = noanim, notifications
+```
+
+## "Smart gaps" example
+
+Remove gaps and borders when only one window is present, using workspace rules and window rules together:
+
+```ini
+# Workspace selectors
+workspace = w[tv1], gapsout:0, gapsin:0
+workspace = f[1], gapsout:0, gapsin:0
+
+windowrule {
+    name = no-gaps-wtv1
+    match:float = false
+    match:workspace = w[tv1]
+
+    border_size = 0
+    rounding = 0
+}
+
+windowrule {
+    name = no-gaps-f1
+    match:float = false
+    match:workspace = f[1]
+
+    border_size = 0
+    rounding = 0
+}
+```
+
+`w[tv1]` selects workspaces with one tiled visible window; `f[1]` selects workspaces with one floating window.
+
+## Checking window properties
+
+Use `hyprctl clients` to see class, title, XWayland status, and other properties for open windows:
+
+```bash
+hyprctl clients
+hyprctl activewindow
+```
+
+Use `hyprctl decorations WINDOW_CLASS` to list active decorations on a window.

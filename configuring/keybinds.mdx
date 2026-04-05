@@ -1,0 +1,362 @@
+---
+title: 'Keybinds'
+description: 'Bind syntax, modifiers, dispatcher reference, submaps, and mouse binds for Hyprland.'
+keywords: ['hyprland', 'keybinds', 'binds', 'shortcuts', 'dispatcher', 'submap']
+---
+
+## Bind syntax
+
+Every keybind follows this pattern:
+
+```
+BINDTYPE = MOD, KEY, DISPATCHER, [ARGS]
+```
+
+| Field | Description |
+|-------|-------------|
+| `BINDTYPE` | `bind`, `bindm`, `bindl`, `bindr`, `binde`, `bindel`, `bindtl`, etc. |
+| `MOD` | Modifier keys separated by `_` (or empty for no modifier) |
+| `KEY` | Key name or keycode (e.g. `Q`, `Return`, `XF86AudioRaiseVolume`) |
+| `DISPATCHER` | Action to execute (see [Dispatchers](#dispatchers)) |
+| `ARGS` | Optional arguments passed to the dispatcher |
+
+```ini
+$mainMod = SUPER
+
+# Launch terminal
+bind = $mainMod, Q, exec, kitty
+
+# Close active window
+bind = $mainMod, C, killactive,
+
+# Move focus left
+bind = $mainMod, left, movefocus, l
+```
+
+## Bind types
+
+| Type | Description |
+|------|-------------|
+| `bind` | Standard bind — fires on key press |
+| `bindm` | Mouse bind — fires on mouse button press with dragging |
+| `bindl` | Locked bind — fires even when the session is locked |
+| `bindr` | Release bind — fires on key release |
+| `binde` | Repeat bind — continues firing while key is held |
+| `bindel` | Repeat + locked — repeating bind that works on locked sessions |
+| `bindtl` | Long-press bind — fires after the key is held for a duration |
+| `bindn` | Non-consuming bind — event passes through to the application |
+| `bindt` | Transparent bind — passes key to the focused window |
+| `bindk` | Per-device bind — only fires for specified input devices |
+| `bindi` | Ignore-mods bind — fires regardless of active modifiers |
+
+Flags can be combined in a single keyword: `bindel`, `bindlr`, etc.
+
+<CodeGroup>
+
+```ini Mouse binds
+# Move window by dragging
+bindm = $mainMod, mouse:272, movewindow
+
+# Resize window by dragging
+bindm = $mainMod, mouse:273, resizewindow
+```
+
+```ini Locked/release binds
+# Media keys — work even on lock screen
+bindl = , XF86AudioNext, exec, playerctl next
+bindl = , XF86AudioPause, exec, playerctl play-pause
+bindl = , XF86AudioPlay, exec, playerctl play-pause
+bindl = , XF86AudioPrev, exec, playerctl previous
+```
+
+```ini Repeat binds
+# Volume — repeats while key is held
+bindel = , XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+
+bindel = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+```
+
+</CodeGroup>
+
+## Modifiers
+
+Modifiers are specified in `UPPER_CASE` and combined with `_`:
+
+| Modifier | Key |
+|----------|-----|
+| `SUPER` | Super / Meta / Windows key |
+| `SHIFT` | Shift |
+| `CTRL` or `CONTROL` | Control |
+| `ALT` | Alt |
+| `CAPS` | Caps Lock |
+| `HYPER` | Hyper (rarely used physical key) |
+| `MOD2` | Mod2 (Num Lock) |
+| `MOD3` | Mod3 |
+| `MOD5` | Mod5 |
+
+Examples:
+
+```ini
+bind = SUPER, Q, exec, kitty              # Super only
+bind = SUPER_SHIFT, Q, exec, kitty       # Super + Shift
+bind = CTRL_ALT, Delete, exec, wlogout   # Ctrl + Alt
+bind = , F1, exec, rofi -show run        # No modifier
+```
+
+## Special keys
+
+Use XF86 key names for multimedia keys:
+
+```ini
+bindel = , XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+
+bindel = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindel = , XF86AudioMute, exec, wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindel = , XF86AudioMicMute, exec, wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+bindel = , XF86MonBrightnessUp, exec, brightnessctl -e4 -n2 set 5%+
+bindel = , XF86MonBrightnessDown, exec, brightnessctl -e4 -n2 set 5%-
+```
+
+Mouse buttons use `mouse:BUTTON_CODE`:
+
+| Name | Code |
+|------|------|
+| Left button | `mouse:272` |
+| Right button | `mouse:273` |
+| Middle button | `mouse:274` |
+| Scroll up | `mouse_up` |
+| Scroll down | `mouse_down` |
+
+## Dispatchers
+
+Use `hyprctl dispatch DISPATCHER [ARGS]` to run any dispatcher from the command line.
+
+<AccordionGroup>
+
+<Accordion title="Window management">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `exec` | Execute a shell command |
+| `execr` | Execute a raw shell command (no shell expansion) |
+| `killactive` | Close the active window |
+| `closewindow` | Close a specified window |
+| `togglefloating` | Toggle the active window's floating state |
+| `setfloating` | Force the active window to float |
+| `settiled` | Force the active window to tile |
+| `fullscreen` | Toggle fullscreen for the active window |
+| `fakefullscreen` | Toggle fake (client-side) fullscreen |
+| `fullscreenstate` | Set specific fullscreen mode sent to client |
+| `pin` | Pin a floating window (stays on all workspaces) |
+| `centerwindow` | Center the active floating window |
+| `resizeactive` | Resize the active window |
+| `moveactive` | Move the active floating window |
+| `resizewindowpixel` | Resize a specific window |
+| `movewindowpixel` | Move a specific window |
+| `alterzorder` | Modify window stacking order |
+| `bringactivetotop` | Bring the active window to top of stack |
+
+```ini
+bind = $mainMod, V, togglefloating,
+bind = $mainMod, F, fullscreen,
+bind = $mainMod SHIFT, F, fakefullscreen,
+```
+
+</Accordion>
+
+<Accordion title="Focus and navigation">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `movefocus` | Move focus in a direction (`l`, `r`, `u`, `d`) |
+| `focuswindow` | Focus the first window matching a selector |
+| `focusmonitor` | Focus a monitor by name or direction |
+| `cyclenext` | Cycle focus to the next window on the workspace |
+| `swapnext` | Swap the active window with the next one |
+| `swapwindow` | Swap the active window with another |
+| `focusurgentorlast` | Focus the urgent window, or the last focused |
+| `focuscurrentorlast` | Toggle focus between current and previous window |
+
+```ini
+bind = $mainMod, left, movefocus, l
+bind = $mainMod, right, movefocus, r
+bind = $mainMod, up, movefocus, u
+bind = $mainMod, down, movefocus, d
+```
+
+</Accordion>
+
+<Accordion title="Workspace management">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `workspace` | Switch to a workspace |
+| `movetoworkspace` | Move the active window to a workspace and follow it |
+| `movetoworkspacesilent` | Move the active window to a workspace without switching |
+| `swapactiveworkspaces` | Swap the active workspaces between two monitors |
+| `movecurrentworkspacetomonitor` | Move the active workspace to a monitor |
+| `focusworkspaceoncurrentmonitor` | Focus a workspace on the current monitor |
+| `moveworkspacetomonitor` | Move a workspace to a monitor |
+| `togglespecialworkspace` | Toggle the special (scratchpad) workspace |
+| `renameworkspace` | Rename a workspace |
+
+Workspace arguments support relative, named, and special selectors:
+
+```ini
+# Absolute workspace
+bind = $mainMod, 1, workspace, 1
+
+# Relative workspaces
+bind = $mainMod, mouse_down, workspace, e+1
+bind = $mainMod, mouse_up, workspace, e-1
+
+# Named workspace
+bind = $mainMod, D, workspace, name:dev
+
+# Special workspace (scratchpad)
+bind = $mainMod, S, togglespecialworkspace, magic
+bind = $mainMod SHIFT, S, movetoworkspace, special:magic
+```
+
+</Accordion>
+
+<Accordion title="Groups (tabs)">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `togglegroup` | Toggle the active window in/out of a group |
+| `changegroupactive` | Switch the active tab in a group (`f`=forward, `b`=back) |
+| `lockgroups` | Lock all groups to prevent windows entering/leaving |
+| `lockactivegroup` | Lock the focused group |
+| `moveintogroup` | Move the active window into a group in a direction |
+| `moveoutofgroup` | Move the active window out of its group |
+| `movewindoworgroup` | Move window or group in direction |
+| `movegroupwindow` | Swap the active tab with next or previous |
+| `denywindowfromgroup` | Prevent the active window from joining groups |
+| `setignoregrouplock` | Temporarily override group lock |
+
+</Accordion>
+
+<Accordion title="Monitor and display">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `dpms` | Set DPMS state (`on`, `off`, `toggle`) for all or a named monitor |
+| `focusmonitor` | Move focus to a monitor |
+| `movecurrentworkspacetomonitor` | Move active workspace to a monitor |
+| `forcerendererreload` | Force renderer to reload all resources |
+
+```ini
+bind = $mainMod SHIFT, P, dpms, toggle
+```
+
+</Accordion>
+
+<Accordion title="Layout messages">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `layoutmsg` | Send a message to the active layout |
+| `pseudo` | Toggle pseudo-tiling (dwindle layout) |
+| `splitratio` | Adjust split ratio |
+
+Common `layoutmsg` arguments:
+
+| Message | Description |
+|---------|-------------|
+| `togglesplit` | Toggle horizontal/vertical split (dwindle) |
+| `swapwithmaster` | Swap active window with the master (master layout) |
+| `focusmaster` | Focus the master window |
+| `addmaster` | Add a master window |
+| `removemaster` | Remove a master window |
+
+```ini
+bind = $mainMod, P, pseudo,
+bind = $mainMod, J, layoutmsg, togglesplit
+```
+
+</Accordion>
+
+<Accordion title="Cursor and misc">
+
+| Dispatcher | Description |
+|------------|-------------|
+| `movecursor` | Move cursor to an absolute position |
+| `movecursortocorner` | Move cursor to a corner of the active window (0–3) |
+| `pass` | Pass the keybind to a specified window |
+| `sendshortcut` | Send a shortcut to a specified window |
+| `sendkeystate` | Send key with specific state to a window |
+| `tagwindow` | Apply a tag to the active window |
+| `event` | Emit a custom event to Hyprland socket2 |
+| `global` | Execute a global shortcut via the GlobalShortcuts portal |
+| `submap` | Change the active keymap submap |
+| `exit` | Exit Hyprland |
+
+</Accordion>
+
+</AccordionGroup>
+
+## Submaps
+
+Submaps let you create modal keybind layers similar to Vim modes. Use `submap` to switch the active layer and `submap, reset` to return to normal.
+
+```ini
+# Enter resize mode
+bind = $mainMod, R, submap, resize
+
+submap = resize
+    # Arrow keys resize the active window
+    binde = , right, resizeactive, 10 0
+    binde = , left, resizeactive, -10 0
+    binde = , up, resizeactive, 0 -10
+    binde = , down, resizeactive, 0 10
+
+    # Escape exits the submap
+    bind = , escape, submap, reset
+submap = reset
+```
+
+<Note>
+  All binds defined between `submap = NAME` and `submap = reset` belong to that submap. Binds outside any submap block belong to the default (global) layer.
+</Note>
+
+## Per-device binds
+
+Target specific input devices using the `k` flag (`bindk`). The device list is passed as an extra argument after the modifier and key, using `[!]device1 device2 ...`. Prefix with `!` to match all devices *except* those listed.
+
+```ini
+# Only fire for a specific keyboard
+bindk = , F1, my-keyboard-name, exec, notify-send hello
+
+# Fire for all devices except the listed one
+bindk = , F1, !my-keyboard-name, exec, notify-send hello
+```
+
+You can list device names with `hyprctl devices`.
+
+## Unbinding
+
+Remove an existing bind with `unbind`:
+
+```ini
+unbind = SUPER, Q
+```
+
+## Workspace switching examples
+
+```ini
+# Switch workspaces 1–10
+bind = $mainMod, 1, workspace, 1
+bind = $mainMod, 2, workspace, 2
+bind = $mainMod, 3, workspace, 3
+bind = $mainMod, 4, workspace, 4
+bind = $mainMod, 5, workspace, 5
+bind = $mainMod, 6, workspace, 6
+bind = $mainMod, 7, workspace, 7
+bind = $mainMod, 8, workspace, 8
+bind = $mainMod, 9, workspace, 9
+bind = $mainMod, 0, workspace, 10
+
+# Move window to workspace
+bind = $mainMod SHIFT, 1, movetoworkspace, 1
+bind = $mainMod SHIFT, 2, movetoworkspace, 2
+# ...
+```

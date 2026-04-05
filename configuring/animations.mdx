@@ -1,0 +1,267 @@
+---
+title: 'Animations'
+description: 'Configure animation curves, speeds, and styles for windows, workspaces, borders, and layers in Hyprland.'
+keywords: ['hyprland', 'animations', 'bezier', 'transitions', 'easing', 'performance']
+---
+
+## Overview
+
+Hyprland's animation system is driven by two primitives:
+
+1. **Bezier curves** — define the easing function (how fast or slow the animation accelerates/decelerates)
+2. **Animation nodes** — define which element animates, how fast, which curve, and optionally what style
+
+Animations inherit from parent nodes, so setting `global` affects everything, and you only need to override specific nodes.
+
+## Enabling animations
+
+```ini
+animations {
+    enabled = yes
+}
+```
+
+The value is parsed as a boolean. Any truthy value works (`yes`, `1`, `true`, `on`).
+
+## Bezier curves
+
+```
+bezier = NAME, X0, Y0, X1, Y1
+```
+
+Curves follow the CSS `cubic-bezier(x1, y1, x2, y2)` convention with two control points. All values are typically in the range 0.0–1.0, though values outside this range produce overshoot/bounce effects.
+
+```ini
+bezier = easeOutQuint,   0.23, 1,    0.32, 1
+bezier = easeInOutCubic, 0.65, 0.05, 0.36, 1
+bezier = linear,         0,    0,    1,    1
+bezier = almostLinear,   0.5,  0.5,  0.75, 1
+bezier = quick,          0.15, 0,    0.1,  1
+```
+
+A built-in `default` bezier is always available and does not need to be declared.
+
+<Tip>
+  Use a tool like [cubic-bezier.com](https://cubic-bezier.com) to visualize and design easing curves. Copy the four control point values directly into your `bezier` line.
+</Tip>
+
+## Animation nodes
+
+```
+animation = NAME, ONOFF, SPEED, CURVE [, STYLE]
+```
+
+| Field | Description |
+|-------|-------------|
+| `NAME` | Animation tree node name (see below) |
+| `ONOFF` | `1` to enable, `0` to disable |
+| `SPEED` | Animation speed — lower is faster (roughly: seconds × 10) |
+| `CURVE` | Name of a declared bezier curve, or `default` |
+| `STYLE` | Optional style modifier (see below) |
+
+```ini
+animation = global,        1, 10,   default
+animation = border,        1, 5.39, easeOutQuint
+animation = windows,       1, 4.79, easeOutQuint
+animation = windowsIn,     1, 4.1,  easeOutQuint, popin 87%
+animation = windowsOut,    1, 1.49, linear,       popin 87%
+animation = fadeIn,        1, 1.73, almostLinear
+animation = fadeOut,       1, 1.46, almostLinear
+animation = fade,          1, 3.03, quick
+animation = layers,        1, 3.81, easeOutQuint
+animation = layersIn,      1, 4,    easeOutQuint, fade
+animation = layersOut,     1, 1.5,  linear,       fade
+animation = fadeLayersIn,  1, 1.79, almostLinear
+animation = fadeLayersOut, 1, 1.39, almostLinear
+animation = workspaces,    1, 1.94, almostLinear, fade
+animation = workspacesIn,  1, 1.21, almostLinear, fade
+animation = workspacesOut, 1, 1.94, almostLinear, fade
+animation = zoomFactor,    1, 7,    quick
+```
+
+## Animation tree
+
+Nodes inherit from their parent. Overriding a parent overrides all children that haven't been explicitly set.
+
+```
+global
+├── windows
+│   ├── windowsIn        (window open)
+│   └── windowsOut       (window close)
+├── fade
+│   ├── fadeIn           (opacity fade in)
+│   ├── fadeOut          (opacity fade out)
+│   └── fadeShadow       (shadow fade)
+├── border               (border color transitions)
+├── layers               (compositor layers, e.g. bars)
+│   ├── layersIn
+│   └── layersOut
+├── fadeLayersIn
+├── fadeLayersOut
+├── workspaces           (workspace switch)
+│   ├── workspacesIn
+│   └── workspacesOut
+└── zoomFactor           (cursor zoom animation)
+```
+
+Setting `animation = global, 0, ...` disables all animations at once. Setting `animation = windows, 0, ...` only disables window open/close.
+
+## Style modifiers
+
+Some animation nodes accept an optional style argument:
+
+<Tabs>
+  <Tab title="Windows">
+    | Style | Description |
+    |-------|-------------|
+    | `slide` | Window slides in from the edge |
+    | `slidevert` | Window slides in vertically |
+    | `popin` | Window scales up from a point |
+    | `popin N%` | Scale starts at N% of the final size |
+
+    ```ini
+    animation = windowsIn, 1, 4, easeOutQuint, popin 80%
+    animation = windowsOut, 1, 2, linear, slide
+    ```
+  </Tab>
+  <Tab title="Workspaces">
+    | Style | Description |
+    |-------|-------------|
+    | `slide` | Workspaces slide horizontally |
+    | `slidevert` | Workspaces slide vertically |
+    | `fade` | Cross-fade between workspaces |
+    | `slidefade` | Slide with fade |
+    | `slidefade N%` | Slide with N% offset fade |
+
+    ```ini
+    animation = workspaces, 1, 2, almostLinear, fade
+    animation = workspaces, 1, 2, easeOutQuint, slide
+    ```
+  </Tab>
+  <Tab title="Layers">
+    | Style | Description |
+    |-------|-------------|
+    | `slide` | Layer slides in from edge |
+    | `slidevert` | Layer slides vertically |
+    | `fade` | Layer fades in |
+    | `popin` | Layer pops in |
+    | `popin N%` | Pop in from N% size |
+
+    ```ini
+    animation = layersIn, 1, 4, easeOutQuint, fade
+    animation = layersOut, 1, 1.5, linear, fade
+    ```
+  </Tab>
+</Tabs>
+
+## Default config animation block
+
+This is the full animation block from the default Hyprland config:
+
+```ini
+animations {
+    enabled = yes, please :)
+
+    #        NAME,           X0,   Y0,   X1,   Y1
+    bezier = easeOutQuint,   0.23, 1,    0.32, 1
+    bezier = easeInOutCubic, 0.65, 0.05, 0.36, 1
+    bezier = linear,         0,    0,    1,    1
+    bezier = almostLinear,   0.5,  0.5,  0.75, 1
+    bezier = quick,          0.15, 0,    0.1,  1
+
+    #           NAME,          ONOFF, SPEED, CURVE,        [STYLE]
+    animation = global,        1,     10,    default
+    animation = border,        1,     5.39,  easeOutQuint
+    animation = windows,       1,     4.79,  easeOutQuint
+    animation = windowsIn,     1,     4.1,   easeOutQuint, popin 87%
+    animation = windowsOut,    1,     1.49,  linear,       popin 87%
+    animation = fadeIn,        1,     1.73,  almostLinear
+    animation = fadeOut,       1,     1.46,  almostLinear
+    animation = fade,          1,     3.03,  quick
+    animation = layers,        1,     3.81,  easeOutQuint
+    animation = layersIn,      1,     4,     easeOutQuint, fade
+    animation = layersOut,     1,     1.5,   linear,       fade
+    animation = fadeLayersIn,  1,     1.79,  almostLinear
+    animation = fadeLayersOut, 1,     1.39,  almostLinear
+    animation = workspaces,    1,     1.94,  almostLinear, fade
+    animation = workspacesIn,  1,     1.21,  almostLinear, fade
+    animation = workspacesOut, 1,     1.94,  almostLinear, fade
+    animation = zoomFactor,    1,     7,     quick
+}
+```
+
+## Per-window animation overrides
+
+Use a `windowrule` to apply a different animation to a specific window:
+
+```ini
+windowrule {
+    name = special-app-anim
+    match:class = myapp
+
+    animation = slide
+}
+```
+
+## Inspecting animations at runtime
+
+```bash
+hyprctl animations
+```
+
+This prints the active animation tree and bezier curve definitions.
+
+## Performance tips
+
+<AccordionGroup>
+
+<Accordion title="Reduce blur passes">
+  Blur is the most GPU-intensive decoration. Reducing `blur:passes` from 3 to 1 has a large impact, especially at higher resolutions.
+
+  ```ini
+  decoration {
+      blur {
+          passes = 1
+          size = 3
+      }
+  }
+  ```
+</Accordion>
+
+<Accordion title="Disable animations globally">
+  Set the master switch to 0 to turn off all animations:
+
+  ```ini
+  animations {
+      enabled = false
+  }
+  ```
+</Accordion>
+
+<Accordion title="Reduce animation speed">
+  Higher `SPEED` values make animations faster (shorter duration). A speed of `10` is very fast, around `1`–`2` is slow.
+
+  ```ini
+  animation = windows, 1, 8, easeOutQuint
+  ```
+</Accordion>
+
+<Accordion title="Disable VFR if needed">
+  Variable frame rate (`misc:vfr = true`) reduces GPU load during idle. If animations stutter on wake, try disabling it:
+
+  ```ini
+  misc {
+      vfr = false
+  }
+  ```
+</Accordion>
+
+<Accordion title="Use simpler curves">
+  The `linear` bezier requires less computation than complex easing functions. For machines with weak GPUs, using `linear` for all animations reduces overhead:
+
+  ```ini
+  animation = global, 1, 5, linear
+  ```
+</Accordion>
+
+</AccordionGroup>
